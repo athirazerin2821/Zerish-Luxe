@@ -1582,7 +1582,7 @@ export default function App() {
                         
                         {/* Material label */}
                         <p className="text-[9px] text-taupe uppercase font-semibold">
-                          {p.material || '316L Stainless Steel • 18k PVD'}
+                          {p.material || '316 Stainless Steel • 18k PVD'}
                         </p>
                       </div>
 
