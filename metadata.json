@@ -1,0 +1,8 @@
+{
+  "name": "Zerish Luxe",
+  "description": "Minimalist premium jewellery collection, featuring bespoke chains, earrings, bracelets, cuff bracelets, and hair accessories with dynamic seller collections and custom curation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
