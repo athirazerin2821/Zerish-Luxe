@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Poppins:wght@300;400;500;600;700&family=Montserrat:wght@500;600;700&display=swap');
+
+@theme {
+  /* Brand Color Palette */
+  --color-espresso: #262220;    /* Dark Charcoal Espresso */
+  --color-terracotta: #A15C38;  /* Rich Copper Terracotta */
+  --color-taupe: #C3A6A0;       /* Soft Dusty Rose-Gold */
+  --color-clay: #C3A6A0;        /* Supporting Dusty Tone */
+  --color-linen: #F7F1F0;       /* Ultra Warm Soft Nude Background */
+  
+  /* Font Pairings */
+  --font-serif: "Playfair Display", Georgia, serif;
+  --font-sans: "Poppins", system-ui, -apple-system, sans-serif;
+  --font-mono: "Montserrat", sans-serif;
+}
+
+/* Custom smooth transitions and keyframes */
+@layer base {
+  body {
+    background-color: #F7F1F0;
+    color: #262220;
+    font-family: var(--font-sans);
+    overflow-x: hidden;
+  }
+}
+
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
