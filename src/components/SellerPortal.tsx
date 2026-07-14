@@ -20,7 +20,7 @@ import {
   Star,
   MessageSquare
 } from 'lucide-react';
-import { Product, Order, Coupon, SalesAnalytics, Testimonial, UserAccount } from '../types';
+import { Product, Order, Coupon, SalesAnalytics, Testimonial, UserAccount, CategorySetting } from '../types';
 import { PRESET_IMAGE_TEMPLATES } from '../data';
 
 interface SellerPortalProps {
@@ -42,6 +42,8 @@ interface SellerPortalProps {
   onUpdateHeroText: (text: { title: string; subtitle: string }) => void;
   reviews?: Testimonial[];
   onDeleteReview?: (id: string) => void;
+  categories?: CategorySetting[];
+  onUpdateCategories?: (categories: CategorySetting[]) => Promise<void> | void;
 }
 
 export default function SellerPortal({
@@ -62,7 +64,9 @@ export default function SellerPortal({
   heroText,
   onUpdateHeroText,
   reviews = [],
-  onDeleteReview
+  onDeleteReview,
+  categories = [],
+  onUpdateCategories
 }: SellerPortalProps) {
   // Auth states
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -73,6 +77,7 @@ export default function SellerPortal({
   const [newProdName, setNewProdName] = useState('');
   const [newProdCategory, setNewProdCategory] = useState<Product['category']>('chains');
   const [newProdPrice, setNewProdPrice] = useState(1500);
+  const [newProdOriginalPrice, setNewProdOriginalPrice] = useState<number | ''>('');
   const [newProdDesc, setNewProdDesc] = useState('');
   const [newProdImg, setNewProdImg] = useState(PRESET_IMAGE_TEMPLATES[0].url);
   const [customImg, setCustomImg] = useState('');
@@ -204,8 +209,17 @@ export default function SellerPortal({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editPrice, setEditPrice] = useState(0);
+  const [editOriginalPrice, setEditOriginalPrice] = useState<number | ''>('');
   const [editStock, setEditStock] = useState(0);
   const [editCategory, setEditCategory] = useState<Product['category']>('chains');
+  const [editDesc, setEditDesc] = useState('');
+  const [editMaterial, setEditMaterial] = useState('');
+  const [editDims, setEditDims] = useState('');
+  const [editImg, setEditImg] = useState('');
+
+  // Multi-select and bulk actions states
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   // Coupon Form state
   const [newCouponCode, setNewCouponCode] = useState('');
@@ -216,6 +230,68 @@ export default function SellerPortal({
   const [bannerTitle, setBannerTitle] = useState(heroText.title);
   const [bannerSub, setBannerSub] = useState(heroText.subtitle);
   const [bannerUpdated, setBannerUpdated] = useState(false);
+
+  // Dynamic Category Images state
+  const [localCategories, setLocalCategories] = useState<CategorySetting[]>(categories);
+  const [categoriesUpdated, setCategoriesUpdated] = useState(false);
+  const [catUploadingIdx, setCatUploadingIdx] = useState<number | null>(null);
+
+  React.useEffect(() => {
+    if (categories && categories.length > 0) {
+      setLocalCategories(categories);
+    }
+  }, [categories]);
+
+  const handleCategoryFieldChange = (idx: number, field: keyof CategorySetting, val: string) => {
+    const updated = [...localCategories];
+    updated[idx] = { ...updated[idx], [field]: val };
+    setLocalCategories(updated);
+  };
+
+  const handleCategoryUpload = async (idx: number, file: File) => {
+    setCatUploadingIdx(idx);
+    try {
+      const { uploadProductImage } = await import('../services/firebaseDb');
+      const url = await Promise.race([
+        uploadProductImage(file),
+        new Promise<string>((_, reject) => 
+          setTimeout(() => reject(new Error('TIMEOUT')), 3500)
+        )
+      ]);
+      const updated = [...localCategories];
+      updated[idx] = { ...updated[idx], imageUrl: url };
+      setLocalCategories(updated);
+      alert('Category image uploaded successfully!');
+    } catch (error) {
+      console.warn('Upload failed. Falling back to base64 compression.', error);
+      try {
+        const base64Url = await compressImageToBase64(file);
+        const updated = [...localCategories];
+        updated[idx] = { ...updated[idx], imageUrl: base64Url };
+        setLocalCategories(updated);
+        alert('Category image processed and saved successfully!');
+      } catch (compressErr) {
+        console.error('Compression failed:', compressErr);
+        alert('Error processing file.');
+      }
+    } finally {
+      setCatUploadingIdx(null);
+    }
+  };
+
+  const handleSaveCategories = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (onUpdateCategories) {
+      try {
+        await onUpdateCategories(localCategories);
+        setCategoriesUpdated(true);
+        setTimeout(() => setCategoriesUpdated(false), 2000);
+        alert('Category catalog images updated successfully!');
+      } catch (err: any) {
+        alert('Error updating categories: ' + (err.message || err));
+      }
+    }
+  };
 
   // Active sub-section in Admin Dashboard
   const [adminTab, setAdminTab] = useState<'analytics' | 'catalog' | 'orders' | 'customers' | 'coupons' | 'settings' | 'reviews'>('analytics');
@@ -248,6 +324,7 @@ export default function SellerPortal({
         name: newProdName,
         category: newProdCategory,
         price: Number(newProdPrice),
+        originalPrice: newProdOriginalPrice ? Number(newProdOriginalPrice) : undefined,
         description: newProdDesc || `${newProdName} - handpicked luxury fine jewelry. Waterproof, sweatproof, and anti-tarnish designed for everyday elegance.`,
         imageUrl: primaryUrl,
         thumbnails: allThumbnails,
@@ -265,6 +342,7 @@ export default function SellerPortal({
       // Reset fields
       setNewProdName('');
       setNewProdDesc('');
+      setNewProdOriginalPrice('');
       setCustomImg('');
       setNewProdDims('');
       setAdditionalImages([]);
@@ -284,8 +362,13 @@ export default function SellerPortal({
         ...p,
         name: editName,
         price: Number(editPrice),
+        originalPrice: editOriginalPrice ? Number(editOriginalPrice) : undefined,
         stock: Number(editStock),
-        category: editCategory
+        category: editCategory,
+        description: editDesc,
+        material: editMaterial,
+        dimensions: editDims,
+        imageUrl: editImg
       });
       setEditingId(null);
       alert('Product updated successfully!');
@@ -302,6 +385,7 @@ export default function SellerPortal({
     setDeletingId(id);
     try {
       await onDeleteProduct(id);
+      setSelectedProductIds(prev => prev.filter(x => x !== id));
       alert('Product deleted successfully!');
     } catch (error: any) {
       console.error(error);
@@ -315,8 +399,58 @@ export default function SellerPortal({
     setEditingId(p.id);
     setEditName(p.name);
     setEditPrice(p.price);
+    setEditOriginalPrice(p.originalPrice || '');
     setEditStock(p.stock || 0);
     setEditCategory(p.category);
+    setEditDesc(p.description || '');
+    setEditMaterial(p.material || '');
+    setEditDims(p.dimensions || '');
+    setEditImg(p.imageUrl || '');
+  };
+
+  const handleToggleSelectProduct = (id: string) => {
+    setSelectedProductIds(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllProducts = (allIds: string[]) => {
+    if (selectedProductIds.length === allIds.length) {
+      setSelectedProductIds([]);
+    } else {
+      setSelectedProductIds(allIds);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedProductIds.length === 0) return;
+    if (!confirm(`Are you sure you want to permanently delete the ${selectedProductIds.length} selected listings?`)) return;
+    
+    setIsBulkDeleting(true);
+    let successCount = 0;
+    let failCount = 0;
+    
+    try {
+      for (const id of selectedProductIds) {
+        try {
+          await onDeleteProduct(id);
+          successCount++;
+        } catch (err) {
+          console.error(`Error deleting product ${id}:`, err);
+          failCount++;
+        }
+      }
+      setSelectedProductIds([]);
+      if (failCount > 0) {
+        alert(`Bulk delete finished. Successfully deleted ${successCount} products. Failed to delete ${failCount} products.`);
+      } else {
+        alert(`Successfully deleted all ${successCount} selected products.`);
+      }
+    } catch (err: any) {
+      alert('Bulk delete failed: ' + (err.message || err));
+    } finally {
+      setIsBulkDeleting(false);
+    }
   };
 
   const handleSaveBanner = (e: React.FormEvent) => {
@@ -662,16 +796,28 @@ export default function SellerPortal({
                               </select>
                             </div>
 
-                            <div>
-                              <label className="block text-[9px] uppercase tracking-wider font-semibold text-espresso mb-1">Price (₹)</label>
-                              <input 
-                                type="number" 
-                                required
-                                min="100"
-                                value={newProdPrice}
-                                onChange={(e) => setNewProdPrice(Number(e.target.value))}
-                                className="w-full border border-espresso/20 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
-                              />
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[9px] uppercase tracking-wider font-semibold text-espresso mb-1">Offer Price (₹)</label>
+                                <input 
+                                  type="number" 
+                                  required
+                                  min="1"
+                                  value={newProdPrice}
+                                  onChange={(e) => setNewProdPrice(Number(e.target.value))}
+                                  className="w-full border border-espresso/20 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[9px] uppercase tracking-wider font-semibold text-espresso mb-1">Original Price (₹)</label>
+                                <input 
+                                  type="number" 
+                                  placeholder="Optional"
+                                  value={newProdOriginalPrice}
+                                  onChange={(e) => setNewProdOriginalPrice(e.target.value === '' ? '' : Number(e.target.value))}
+                                  className="w-full border border-espresso/20 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                />
+                              </div>
                             </div>
                           </div>
 
@@ -886,17 +1032,45 @@ export default function SellerPortal({
 
                       {/* Right: Manage Store Listings (7 Columns) */}
                       <div className="lg:col-span-7 space-y-4">
-                        <div className="border-b border-espresso/10 pb-2 flex items-center justify-between">
-                          <h4 className="font-serif text-sm font-bold text-espresso">Active Fine Catalog ({products.length})</h4>
+                        <div className="border-b border-espresso/10 pb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div className="flex items-center space-x-3">
+                            {products.length > 0 && (
+                              <input 
+                                type="checkbox"
+                                checked={selectedProductIds.length === products.length && products.length > 0}
+                                onChange={() => handleSelectAllProducts(products.map(p => p.id))}
+                                className="rounded-xs border-espresso/30 text-terracotta focus:ring-terracotta cursor-pointer"
+                                title="Select All / Deselect All"
+                              />
+                            )}
+                            <h4 className="font-serif text-sm font-bold text-espresso">Active Fine Catalog ({products.length})</h4>
+                          </div>
                           
-                          <button 
-                            onClick={onResetCatalog}
-                            className="text-[9px] uppercase tracking-wider font-extrabold text-taupe hover:text-rose-600 flex items-center space-x-1"
-                            title="Reset all listings to initial defaults"
-                          >
-                            <RefreshCw className="w-3 h-3" />
-                            <span>Reset Store</span>
-                          </button>
+                          <div className="flex items-center space-x-3">
+                            {selectedProductIds.length > 0 && (
+                              <button
+                                onClick={handleBulkDelete}
+                                disabled={isBulkDeleting}
+                                className="text-[10px] uppercase tracking-wider font-extrabold text-rose-600 hover:text-rose-800 bg-rose-50 px-2.5 py-1 rounded-sm border border-rose-200/50 flex items-center space-x-1.5 transition-colors disabled:opacity-50 cursor-pointer"
+                              >
+                                {isBulkDeleting ? (
+                                  <div className="w-3 h-3 border-2 border-rose-600/30 border-t-rose-600 animate-spin rounded-full" />
+                                ) : (
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                )}
+                                <span>Delete Selected ({selectedProductIds.length})</span>
+                              </button>
+                            )}
+
+                            <button 
+                              onClick={onResetCatalog}
+                              className="text-[9px] uppercase tracking-wider font-extrabold text-taupe hover:text-rose-600 flex items-center space-x-1"
+                              title="Reset all listings to initial defaults"
+                            >
+                              <RefreshCw className="w-3 h-3" />
+                              <span>Reset Store</span>
+                            </button>
+                          </div>
                         </div>
 
                         <div className="space-y-3 max-h-[580px] overflow-y-auto pr-1">
@@ -905,38 +1079,142 @@ export default function SellerPortal({
                             return (
                               <div 
                                 key={p.id}
-                                className="p-3 bg-white border border-espresso/10 rounded-xs flex flex-col sm:flex-row sm:items-center justify-between space-y-3 sm:space-y-0 hover:border-terracotta/30 transition-all"
+                                className="p-3 bg-white border border-espresso/10 rounded-xs flex flex-col sm:flex-row sm:items-start justify-between gap-3 hover:border-terracotta/30 transition-all"
                               >
                                 {isEditing ? (
                                   /* Inline Edit Panel */
-                                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2 pr-4">
-                                    <input 
-                                      type="text" 
-                                      value={editName}
-                                      onChange={(e) => setEditName(e.target.value)}
-                                      className="border p-1 text-xs text-espresso"
-                                      placeholder="Name"
-                                    />
-                                    <input 
-                                      type="number" 
-                                      value={editPrice}
-                                      onChange={(e) => setEditPrice(Number(e.target.value))}
-                                      className="border p-1 text-xs text-espresso"
-                                      placeholder="Price"
-                                    />
-                                    <input 
-                                      type="number" 
-                                      value={editStock}
-                                      onChange={(e) => setEditStock(Number(e.target.value))}
-                                      className="border p-1 text-xs text-espresso"
-                                      placeholder="Stock"
-                                    />
-                                    <div className="flex justify-end space-x-2 pt-1 sm:col-span-3">
+                                  <div className="flex-1 space-y-3 pr-2">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                      <div>
+                                        <label className="block text-[8px] uppercase tracking-wider font-semibold text-espresso mb-1">
+                                          Product Name
+                                        </label>
+                                        <input 
+                                          type="text" 
+                                          value={editName}
+                                          onChange={(e) => setEditName(e.target.value)}
+                                          className="w-full border border-espresso/20 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                          placeholder="Name"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-[8px] uppercase tracking-wider font-semibold text-espresso mb-1">
+                                          Category
+                                        </label>
+                                        <select
+                                          value={editCategory}
+                                          onChange={(e) => setEditCategory(e.target.value as Product['category'])}
+                                          className="w-full border border-espresso/20 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                        >
+                                          <option value="chains">Chains</option>
+                                          <option value="necklaces">Necklaces</option>
+                                          <option value="bracelets">Bracelets</option>
+                                          <option value="cuff-bracelets">Cuff Bangles</option>
+                                          <option value="drop-earrings">Drop Earrings</option>
+                                          <option value="stud-earrings">Stud Earrings</option>
+                                          <option value="hair-accessories">Hair Accessories</option>
+                                          <option value="rings">Rings</option>
+                                        </select>
+                                      </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                      <div>
+                                        <label className="block text-[8px] uppercase tracking-wider font-semibold text-espresso mb-1">
+                                          Offer Price (₹)
+                                        </label>
+                                        <input 
+                                          type="number" 
+                                          value={editPrice}
+                                          onChange={(e) => setEditPrice(Number(e.target.value))}
+                                          className="w-full border border-espresso/20 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                          placeholder="Offer Price"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-[8px] uppercase tracking-wider font-semibold text-espresso mb-1">
+                                          Original Price (₹, Opt.)
+                                        </label>
+                                        <input 
+                                          type="number" 
+                                          value={editOriginalPrice}
+                                          onChange={(e) => setEditOriginalPrice(e.target.value === '' ? '' : Number(e.target.value))}
+                                          className="w-full border border-espresso/20 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                          placeholder="Original Price"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-[8px] uppercase tracking-wider font-semibold text-espresso mb-1">
+                                          Stock Qty
+                                        </label>
+                                        <input 
+                                          type="number" 
+                                          value={editStock}
+                                          onChange={(e) => setEditStock(Number(e.target.value))}
+                                          className="w-full border border-espresso/20 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                          placeholder="Stock"
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                      <div>
+                                        <label className="block text-[8px] uppercase tracking-wider font-semibold text-espresso mb-1">
+                                          Material (e.g. 18k Gold Plated)
+                                        </label>
+                                        <input 
+                                          type="text" 
+                                          value={editMaterial}
+                                          onChange={(e) => setEditMaterial(e.target.value)}
+                                          className="w-full border border-espresso/20 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                          placeholder="Material"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-[8px] uppercase tracking-wider font-semibold text-espresso mb-1">
+                                          Dimensions (e.g. 40cm + 5cm)
+                                        </label>
+                                        <input 
+                                          type="text" 
+                                          value={editDims}
+                                          onChange={(e) => setEditDims(e.target.value)}
+                                          className="w-full border border-espresso/20 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                          placeholder="Dimensions"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-[8px] uppercase tracking-wider font-semibold text-espresso mb-1">
+                                          Image URL
+                                        </label>
+                                        <input 
+                                          type="text" 
+                                          value={editImg}
+                                          onChange={(e) => setEditImg(e.target.value)}
+                                          className="w-full border border-espresso/20 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                          placeholder="Image URL"
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div>
+                                      <label className="block text-[8px] uppercase tracking-wider font-semibold text-espresso mb-1">
+                                        Product Description
+                                      </label>
+                                      <textarea 
+                                        value={editDesc}
+                                        onChange={(e) => setEditDesc(e.target.value)}
+                                        rows={3}
+                                        className="w-full border border-espresso/20 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden font-sans"
+                                        placeholder="Description..."
+                                      />
+                                    </div>
+
+                                    <div className="flex justify-end space-x-2 pt-1 border-t border-espresso/5">
                                       <button 
                                         type="button"
                                         disabled={savingEditId === p.id}
                                         onClick={() => handleSaveEdit(p)}
-                                        className="p-1 px-2.5 bg-emerald-600 text-white text-[10px] uppercase font-bold disabled:opacity-50 flex items-center justify-center gap-1 min-w-[55px]"
+                                        className="p-1.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] uppercase font-bold tracking-wider disabled:opacity-50 flex items-center justify-center gap-1 min-w-[70px] cursor-pointer"
                                       >
                                         {savingEditId === p.id ? (
                                           <>
@@ -944,13 +1222,13 @@ export default function SellerPortal({
                                             Saving
                                           </>
                                         ) : (
-                                          'Save'
+                                          'Save changes'
                                         )}
                                       </button>
                                       <button 
                                         type="button"
                                         onClick={() => setEditingId(null)}
-                                        className="p-1 px-2.5 bg-espresso/50 text-white text-[10px] uppercase font-bold"
+                                        className="p-1.5 px-4 bg-espresso/50 hover:bg-espresso text-white text-[10px] uppercase font-bold tracking-wider cursor-pointer"
                                       >
                                         Cancel
                                       </button>
@@ -960,26 +1238,40 @@ export default function SellerPortal({
                                   /* Standard Listing Row */
                                   <>
                                     <div className="flex items-center space-x-3 min-w-0">
-                                      <div className="w-10 h-10 bg-linen border border-espresso/5 rounded-sm overflow-hidden flex-shrink-0">
-                                        <img src={p.imageUrl} className="w-full h-full object-cover" />
+                                      <input 
+                                        type="checkbox"
+                                        checked={selectedProductIds.includes(p.id)}
+                                        onChange={() => handleToggleSelectProduct(p.id)}
+                                        className="rounded-xs border-espresso/30 text-terracotta focus:ring-terracotta cursor-pointer shrink-0"
+                                      />
+                                      <div className="w-12 h-12 bg-linen border border-espresso/5 rounded-sm overflow-hidden flex-shrink-0">
+                                        <img src={p.imageUrl} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                                       </div>
                                       <div className="min-w-0">
                                         <h5 className="font-serif text-xs font-bold text-espresso truncate max-w-[180px]">{p.name}</h5>
                                         <p className="text-[9px] uppercase text-taupe tracking-wider">
                                           {p.category === 'cuff-bracelets' ? 'Cuff Bangles' : p.category.replace('-', ' ')} • <strong className="text-espresso">Stock: {p.stock ?? 15}</strong>
                                         </p>
+                                        <p className="text-[9px] text-espresso/60 line-clamp-1 mt-0.5 max-w-[240px]" title={p.description}>
+                                          {p.description}
+                                        </p>
                                       </div>
                                     </div>
 
-                                    <div className="flex items-center space-x-4">
-                                      <span className="text-xs font-bold text-espresso">₹{p.price.toLocaleString('en-IN')}</span>
+                                    <div className="flex items-center space-x-4 self-center sm:self-auto">
+                                      <div className="flex flex-col items-end">
+                                        <span className="text-xs font-bold text-espresso">₹{p.price.toLocaleString('en-IN')}</span>
+                                        {p.originalPrice && p.originalPrice > p.price && (
+                                          <span className="text-[10px] line-through text-espresso/45">₹{p.originalPrice.toLocaleString('en-IN')}</span>
+                                        )}
+                                      </div>
                                       
                                       <div className="flex items-center space-x-1.5">
                                         {/* Quick edit button */}
                                         <button 
                                           onClick={() => startEdit(p)}
-                                          className="p-1.5 text-espresso/40 hover:text-terracotta rounded-full hover:bg-linen/25 transition-all"
-                                          title="Quick Edit"
+                                          className="p-1.5 text-espresso/40 hover:text-terracotta rounded-full hover:bg-linen/25 transition-all cursor-pointer"
+                                          title="Edit details"
                                         >
                                           <Edit className="w-3.5 h-3.5" />
                                         </button>
@@ -1005,7 +1297,7 @@ export default function SellerPortal({
                                         <button 
                                           onClick={() => handleDelete(p.id)}
                                           disabled={deletingId === p.id}
-                                          className="p-1.5 text-espresso/40 hover:text-rose-600 rounded-full hover:bg-rose-50 transition-all disabled:opacity-50"
+                                          className="p-1.5 text-espresso/40 hover:text-rose-600 rounded-full hover:bg-rose-50 transition-all disabled:opacity-50 cursor-pointer"
                                           title="Delete listing"
                                         >
                                           {deletingId === p.id ? (
@@ -1299,60 +1591,176 @@ export default function SellerPortal({
                   )}
 
                   {/* ========================================== */}
-                  {/* --- TAB E: HOMEPAGE HERO BANNER SETTINGS --- */}
+                  {/* --- TAB E: HOMEPAGE HERO & CATEGORY SETTINGS --- */}
                   {/* ========================================== */}
                   {adminTab === 'settings' && (
-                    <form onSubmit={handleSaveBanner} className="bg-white border border-espresso/10 p-5 rounded-xs space-y-4 max-w-lg">
-                      <div className="border-b border-espresso/10 pb-2 flex items-center space-x-1.5">
-                        <Settings className="w-4 h-4 text-terracotta" />
-                        <h4 className="font-serif text-sm font-bold text-espresso">Live Homepage Customizer</h4>
-                      </div>
-
-                      <div className="space-y-3">
-                        <div>
-                          <label className="block text-[9px] uppercase tracking-wider font-semibold text-espresso mb-1">
-                            Hero Headline (Playfair Display)
-                          </label>
-                          <input 
-                            type="text" 
-                            required
-                            value={bannerTitle}
-                            onChange={(e) => setBannerTitle(e.target.value)}
-                            className="w-full border border-espresso/20 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
-                          />
+                    <div className="space-y-8 max-w-4xl">
+                      {/* Homepage Hero Banner Settings */}
+                      <form onSubmit={handleSaveBanner} className="bg-white border border-espresso/10 p-5 rounded-xs space-y-4 max-w-lg shadow-3xs">
+                        <div className="border-b border-espresso/10 pb-2 flex items-center space-x-1.5">
+                          <Settings className="w-4 h-4 text-terracotta" />
+                          <h4 className="font-serif text-sm font-bold text-espresso">Live Homepage Customizer</h4>
                         </div>
 
-                        <div>
-                          <label className="block text-[9px] uppercase tracking-wider font-semibold text-espresso mb-1">
-                            Hero Subtitle / Tagline
-                          </label>
-                          <input 
-                            type="text" 
-                            required
-                            value={bannerSub}
-                            onChange={(e) => setBannerSub(e.target.value)}
-                            className="w-full border border-espresso/20 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
-                          />
-                        </div>
-                      </div>
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-[9px] uppercase tracking-wider font-semibold text-espresso mb-1">
+                              Hero Headline (Playfair Display)
+                            </label>
+                            <input 
+                              type="text" 
+                              required
+                              value={bannerTitle}
+                              onChange={(e) => setBannerTitle(e.target.value)}
+                              className="w-full border border-espresso/20 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                            />
+                          </div>
 
-                      <button 
-                        type="submit"
-                        className="py-2.5 px-6 bg-espresso hover:bg-terracotta text-[#FAF8F6] text-[10px] uppercase tracking-widest font-extrabold shadow-md transition-all flex items-center space-x-2"
-                      >
-                        {bannerUpdated ? (
-                          <>
-                            <Check className="w-3.5 h-3.5" />
-                            <span>Saved Banner changes!</span>
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="w-3.5 h-3.5 text-linen" />
-                            <span>Apply Banner Updates</span>
-                          </>
-                        )}
-                      </button>
-                    </form>
+                          <div>
+                            <label className="block text-[9px] uppercase tracking-wider font-semibold text-espresso mb-1">
+                              Hero Subtitle / Tagline
+                            </label>
+                            <input 
+                              type="text" 
+                              required
+                              value={bannerSub}
+                              onChange={(e) => setBannerSub(e.target.value)}
+                              className="w-full border border-espresso/20 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                            />
+                          </div>
+                        </div>
+
+                        <button 
+                          type="submit"
+                          className="py-2.5 px-6 bg-espresso hover:bg-terracotta text-[#FAF8F6] text-[10px] uppercase tracking-widest font-extrabold shadow-md transition-all flex items-center space-x-2 cursor-pointer"
+                        >
+                          {bannerUpdated ? (
+                            <>
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Saved Banner changes!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-3.5 h-3.5 text-linen" />
+                              <span>Apply Banner Updates</span>
+                            </>
+                          )}
+                        </button>
+                      </form>
+
+                      {/* Shop By Category Customizer */}
+                      <div className="bg-white border border-espresso/10 p-5 rounded-xs space-y-6 shadow-3xs">
+                        <div className="border-b border-espresso/10 pb-2 flex items-center justify-between">
+                          <div className="flex items-center space-x-1.5">
+                            <Sliders className="w-4 h-4 text-terracotta" />
+                            <h4 className="font-serif text-sm font-bold text-espresso">Shop By Category & Name Settings</h4>
+                          </div>
+                          <span className="text-[9px] uppercase tracking-wider text-taupe font-bold">Edit names, subtitles, and images of categories</span>
+                        </div>
+
+                        <form onSubmit={handleSaveCategories} className="space-y-5">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {localCategories.map((cat, idx) => (
+                              <div key={cat.tabId} className="p-3 bg-[#FAF8F6] border border-espresso/10 rounded-xs flex gap-4 items-center">
+                                {/* Thumbnail Preview */}
+                                <div className="w-20 h-20 shrink-0 aspect-square bg-[#FAF8F6] border border-espresso/10 rounded-xs overflow-hidden relative">
+                                  <img src={cat.imageUrl} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                  {catUploadingIdx === idx && (
+                                    <div className="absolute inset-0 bg-espresso/60 flex items-center justify-center">
+                                      <span className="w-2 h-2 bg-terracotta rounded-full animate-ping"></span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Controls */}
+                                <div className="flex-1 space-y-2">
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                      <label className="block text-[8px] uppercase tracking-wider font-semibold text-espresso mb-0.5">
+                                        Category Name
+                                      </label>
+                                      <input 
+                                        type="text" 
+                                        required
+                                        placeholder="Category Name"
+                                        value={cat.title}
+                                        onChange={(e) => handleCategoryFieldChange(idx, 'title', e.target.value)}
+                                        className="w-full border border-espresso/15 p-1 text-[10px] text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-[8px] uppercase tracking-wider font-semibold text-espresso mb-0.5">
+                                        Subtitle
+                                      </label>
+                                      <input 
+                                        type="text" 
+                                        placeholder="Subtitle (Optional)"
+                                        value={cat.subtitle || ''}
+                                        onChange={(e) => handleCategoryFieldChange(idx, 'subtitle', e.target.value)}
+                                        className="w-full border border-espresso/15 p-1 text-[10px] text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-[8px] uppercase tracking-wider font-semibold text-espresso mb-0.5">
+                                      Image URL
+                                    </label>
+                                    <input 
+                                      type="url" 
+                                      placeholder="Paste Image URL..."
+                                      value={cat.imageUrl}
+                                      onChange={(e) => handleCategoryFieldChange(idx, 'imageUrl', e.target.value)}
+                                      className="w-full border border-espresso/15 p-1 text-[10px] text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                    />
+                                  </div>
+
+                                  {/* File upload for each category */}
+                                  <div className="flex items-center space-x-2 pt-1 border-t border-espresso/5">
+                                    <input 
+                                      type="file" 
+                                      accept="image/*"
+                                      id={`cat-upload-${idx}`}
+                                      className="hidden"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) handleCategoryUpload(idx, file);
+                                      }}
+                                    />
+                                    <label 
+                                      htmlFor={`cat-upload-${idx}`}
+                                      className="px-2 py-0.5 bg-white hover:bg-espresso/5 border border-espresso/20 text-[8px] uppercase tracking-wider font-extrabold text-espresso cursor-pointer transition-colors"
+                                    >
+                                      {catUploadingIdx === idx ? 'Uploading...' : 'Upload File'}
+                                    </label>
+                                    <span className="text-[8px] text-taupe">Or upload image</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="pt-2">
+                            <button 
+                              type="submit"
+                              className="py-2.5 px-6 bg-espresso hover:bg-terracotta text-[#FAF8F6] text-[10px] uppercase tracking-widest font-extrabold shadow-md transition-all flex items-center space-x-2 cursor-pointer"
+                            >
+                              {categoriesUpdated ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5" />
+                                  <span>Saved Catalog Settings!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <RefreshCw className="w-3.5 h-3.5 text-linen" />
+                                  <span>Update Category Settings</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
                   )}
 
                   {/* ========================================== */}
