@@ -103,7 +103,7 @@ export default function ProductModal({
   };
 
   // Accordion details
-  const [activeSection, setActiveSection] = useState<'details' | 'care' | 'shipping'>('details');
+  const [activeSection, setActiveSection] = useState<'care' | 'shipping'>('care');
 
   // Find related products (same category, excluding current)
   const related = products
@@ -316,41 +316,15 @@ export default function ProductModal({
             {/* Price tag */}
             <div className="flex items-baseline space-x-3 pt-1">
               <span className="text-2xl font-bold text-espresso">₹{product.price.toLocaleString('en-IN')}</span>
-              <span className="text-xs text-taupe tracking-wider uppercase font-semibold">Taxes included. Free South India Shipping.</span>
+              {product.originalPrice && product.originalPrice > product.price && (
+                <span className="text-lg line-through text-espresso/45 font-medium">₹{product.originalPrice.toLocaleString('en-IN')}</span>
+              )}
             </div>
 
             {/* Description */}
             <p className="text-xs text-espresso/75 leading-relaxed pt-2 border-t border-espresso/5">
               {product.description}
             </p>
-
-            {/* Material Specifications specs */}
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs pt-3 text-espresso/80">
-              <div className="flex justify-between border-b border-espresso/5 pb-1.5">
-                <span className="text-taupe">Metal composition:</span>
-                <span className="font-semibold">{product.material || '316L Surgical Stainless Steel'}</span>
-              </div>
-              <div className="flex justify-between border-b border-espresso/5 pb-1.5">
-                <span className="text-taupe">Plating detail:</span>
-                <span className="font-semibold">18k Gold PVD Coating</span>
-              </div>
-              <div className="flex justify-between border-b border-espresso/5 pb-1.5">
-                <span className="text-taupe">Dimensions:</span>
-                <span className="font-semibold">{product.dimensions || 'Adjustable sizing'}</span>
-              </div>
-              <div className="flex justify-between border-b border-espresso/5 pb-1.5">
-                <span className="text-taupe">Stock level:</span>
-                <span className={`font-bold uppercase text-[10px] ${
-                  (product.stock || 0) === 0
-                    ? 'text-rose-600'
-                    : (product.stock || 0) < 5
-                    ? 'text-amber-600'
-                    : 'text-emerald-600'
-                }`}>
-                  {(product.stock || 0) === 0 ? 'Out of Stock' : (product.stock || 0) < 5 ? `Low Stock (${product.stock})` : 'In Stock'}
-                </span>
-              </div>
-            </div>
           </div>
 
           {/* Bundle Add - Complete the Look */}
@@ -359,7 +333,7 @@ export default function ProductModal({
               <div className="flex items-center justify-between">
                 <p className="text-[10px] uppercase tracking-widest text-terracotta font-extrabold flex items-center space-x-1.5">
                   <Award className="w-4 h-4" />
-                  <span>COMPLETE THE LOOK & SAVE 10%</span>
+                  <span>COMPLETE THE LOOK & UNLOCK FREE SHIPPING</span>
                 </p>
                 <span className="text-[9px] text-white bg-terracotta px-2 py-0.5 uppercase tracking-wider font-extrabold">Exclusive Bundle</span>
               </div>
@@ -372,7 +346,12 @@ export default function ProductModal({
                   <div className="min-w-0">
                     <p className="text-[9px] uppercase tracking-wider text-taupe">Add matching piece</p>
                     <p className="font-serif text-xs font-bold text-espresso truncate">{bundleItem.name}</p>
-                    <p className="text-xs font-semibold text-espresso">₹{bundleItem.price.toLocaleString('en-IN')}</p>
+                    <p className="text-xs font-semibold text-espresso flex items-center gap-1.5">
+                      <span>₹{bundleItem.price.toLocaleString('en-IN')}</span>
+                      {bundleItem.originalPrice && bundleItem.originalPrice > bundleItem.price && (
+                        <span className="line-through text-[10px] text-espresso/45 font-normal">₹{bundleItem.originalPrice.toLocaleString('en-IN')}</span>
+                      )}
+                    </p>
                   </div>
                 </div>
 
@@ -413,7 +392,7 @@ export default function ProductModal({
           <div className="border-t border-espresso/15 pt-4 space-y-2">
             {/* Tabs Headers */}
             <div className="flex border-b border-espresso/15 text-[10px] uppercase font-bold tracking-widest text-taupe">
-              {(['details', 'care', 'shipping'] as const).map(tab => (
+              {(['care', 'shipping'] as const).map(tab => (
                 <button
                   key={tab}
                   onClick={() => setActiveSection(tab)}
@@ -430,22 +409,13 @@ export default function ProductModal({
 
             {/* Accordion panel content */}
             <div className="py-2.5 min-h-[90px] text-xs leading-relaxed text-espresso/75">
-              {activeSection === 'details' && (
-                <ul className="space-y-1.5 list-disc pl-4 text-espresso/80">
-                  <li>Hypoallergenic surgical-grade stainless steel – perfect for sensitive skin.</li>
-                  <li>Nickel-free, lead-free and chromium-safe alloy composition.</li>
-                  <li>Deep vacuum 18k gold physical vapor deposition (PVD) – waterproof & sweat resistant.</li>
-                  <li>Includes Zerish Luxe authentication certificate & microfiber cleaner cloth.</li>
-                </ul>
-              )}
-
               {activeSection === 'care' && (
                 <div className="space-y-1.5">
                   <p>Our jewelry is engineered for maximum life, but a little care keeps it glowing forever:</p>
                   <ul className="list-disc pl-4 space-y-1">
                     <li>Rinse with lukewarm fresh water after swimming in pool chlorine or sea salt.</li>
-                    <li>Wipe clean using the provided Zerish microfiber buffer flannel.</li>
-                    <li>Store inside the air-tight airtight Zerish pouch when not in wear.</li>
+                    <li>Wipe clean using the provided microfiber buffer flannel.</li>
+                    <li>Store inside the airtight pouch when not in wear.</li>
                     <li>Avoid spraying direct concentrated perfumes/colognes directly onto metallic joints.</li>
                   </ul>
                 </div>
