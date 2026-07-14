@@ -10,11 +10,67 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
-import { Product, Order, Coupon, Testimonial, UserAccount } from '../types';
+import { Product, Order, Coupon, Testimonial, UserAccount, CategorySetting } from '../types';
 import { INITIAL_PRODUCTS, TESTIMONIALS } from '../data';
+
+export const DEFAULT_CATEGORIES: CategorySetting[] = [
+  {
+    title: 'CHAINS',
+    subtitle: null,
+    tabId: 'chains',
+    imageUrl: 'https://images.unsplash.com/photo-1611085583191-a3b1a30d5a41?q=80&w=500&auto=format&fit=crop'
+  },
+  {
+    title: 'EARRINGS',
+    subtitle: 'DROP',
+    tabId: 'drop-earrings',
+    imageUrl: 'https://images.unsplash.com/photo-1635767798638-3e25273a8236?q=80&w=500&auto=format&fit=crop'
+  },
+  {
+    title: 'EARRINGS',
+    subtitle: 'STUD',
+    tabId: 'stud-earrings',
+    imageUrl: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?q=80&w=500&auto=format&fit=crop'
+  },
+  {
+    title: 'RINGS',
+    subtitle: null,
+    tabId: 'rings',
+    imageUrl: 'https://images.unsplash.com/photo-1603561591411-07134e71a2a9?q=80&w=500&auto=format&fit=crop'
+  },
+  {
+    title: 'BRACELETS',
+    subtitle: null,
+    tabId: 'bracelets',
+    imageUrl: 'https://images.unsplash.com/photo-1602751584552-8ba73aad10e1?q=80&w=500&auto=format&fit=crop'
+  },
+  {
+    title: 'CUFF',
+    subtitle: 'BANGLES',
+    tabId: 'cuff-bracelets',
+    imageUrl: 'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?q=80&w=500&auto=format&fit=crop'
+  },
+  {
+    title: 'HAIR',
+    subtitle: 'ACCESSORIES',
+    tabId: 'hair-accessories',
+    imageUrl: 'https://images.unsplash.com/photo-1626784215021-2e39ac514150?q=80&w=500&auto=format&fit=crop'
+  }
+];
 
 // Database Seeding Helper
 export async function seedDatabaseIfEmpty() {
+  // 0. Seed Categories
+  try {
+    const catDoc = await getDoc(doc(db, 'settings', 'categories'));
+    if (!catDoc.exists()) {
+      console.log('Seeding default categories into Firestore...');
+      await setDoc(doc(db, 'settings', 'categories'), { list: DEFAULT_CATEGORIES });
+    }
+  } catch (error) {
+    console.warn('Non-blocking: Could not seed categories settings:', error);
+  }
+
   // 1. Seed Products (Allowed for anyone)
   try {
     const productsSnapshot = await getDocs(collection(db, 'products'));
@@ -223,6 +279,23 @@ export async function getHeroText(): Promise<{ title: string; subtitle: string }
 export async function updateHeroText(title: string, subtitle: string): Promise<void> {
   await setDoc(doc(db, 'settings', 'hero'), { title, subtitle });
 }
+
+// Settings / Categories API
+export async function getCategories(): Promise<CategorySetting[]> {
+  const docSnap = await getDoc(doc(db, 'settings', 'categories'));
+  if (docSnap.exists()) {
+    const data = docSnap.data();
+    if (data && Array.isArray(data.list)) {
+      return data.list as CategorySetting[];
+    }
+  }
+  return DEFAULT_CATEGORIES;
+}
+
+export async function updateCategories(categories: CategorySetting[]): Promise<void> {
+  await setDoc(doc(db, 'settings', 'categories'), { list: categories });
+}
+
 
 // Storage Image Upload
 export async function uploadProductImage(file: File): Promise<string> {
