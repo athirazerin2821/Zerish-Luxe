@@ -3,6 +3,7 @@ export interface Product {
   name: string;
   category: 'chains' | 'necklaces' | 'bracelets' | 'cuff-bracelets' | 'drop-earrings' | 'stud-earrings' | 'hair-accessories' | 'rings';
   price: number;
+  originalPrice?: number;
   description: string;
   imageUrl: string;
   thumbnails?: string[];
@@ -80,3 +81,11 @@ export interface UserAccount {
   postalCode: string;
   joinDate: string;
 }
+
+export interface CategorySetting {
+  tabId: string;
+  title: string;
+  subtitle: string | null;
+  imageUrl: string;
+}
+
