@@ -1183,10 +1183,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full py-8 sm:py-12 lg:py-24">
           <div className="max-w-xl space-y-6 sm:space-y-8 bg-transparent p-2 sm:p-0 rounded-none border-none shadow-none">
             
-            <div className="flex items-center space-x-2 text-terracotta text-xs uppercase tracking-[0.2em] font-bold">
-              <span>✦</span>
-              <span>Minimalist Earrings & Chains Collection</span>
-            </div>
+
 
             <h1 className="font-serif text-4xl sm:text-6xl font-light text-espresso leading-none tracking-tight">
               Minimal. Timeless.
