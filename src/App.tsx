@@ -31,7 +31,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 
 // Data and Types
-import { Product, CartItem, Order, Coupon, OrderDetails, Testimonial, UserAccount } from './types';
+import { Product, CartItem, Order, Coupon, OrderDetails, Testimonial, UserAccount, CategorySetting } from './types';
 import { INITIAL_PRODUCTS, TESTIMONIALS } from './data';
 
 // Firebase Services
@@ -56,7 +56,10 @@ import {
   addCoupon, 
   deleteCoupon,
   saveCustomer,
-  getCustomers
+  getCustomers,
+  getCategories,
+  updateCategories,
+  DEFAULT_CATEGORIES
 } from './services/firebaseDb';
 
 // Custom Modular Components
@@ -218,9 +221,18 @@ export default function App() {
     return TESTIMONIALS;
   });
 
+  const [categories, setCategories] = useState<CategorySetting[]>(() => {
+    const saved = localStorage.getItem('zl_categories');
+    return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES;
+  });
+
   useEffect(() => {
     localStorage.setItem('zl_reviews', JSON.stringify(reviews));
   }, [reviews]);
+
+  useEffect(() => {
+    localStorage.setItem('zl_categories', JSON.stringify(categories));
+  }, [categories]);
 
   // --- UI TRIGGERS ---
   const [activeTab, setActiveTab] = useState<
@@ -273,6 +285,7 @@ export default function App() {
       getProducts().then(setProducts).catch(err => console.error('Firestore getProducts error:', err));
       getReviews().then(setReviews).catch(err => console.error('Firestore getReviews error:', err));
       getHeroText().then(setHeroText).catch(err => console.error('Firestore getHeroText error:', err));
+      getCategories().then(setCategories).catch(err => console.error('Firestore getCategories error:', err));
     });
   }, []);
 
@@ -993,6 +1006,15 @@ export default function App() {
         }}
         reviews={reviews}
         onDeleteReview={handleDeleteReview}
+        categories={categories}
+        onUpdateCategories={async (newCats) => {
+          setCategories(newCats);
+          try {
+            await updateCategories(newCats);
+          } catch (err) {
+            console.error('Error updating categories in Firestore:', err);
+          }
+        }}
       />
     );
   }
@@ -1285,50 +1307,7 @@ export default function App() {
 
           {/* 7 Category Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-6 sm:gap-8">
-            {[
-              {
-                title: 'CHAINS',
-                subtitle: null,
-                tabId: 'chains',
-                imageUrl: 'https://images.unsplash.com/photo-1611085583191-a3b1a30d5a41?q=80&w=500&auto=format&fit=crop'
-              },
-              {
-                title: 'EARRINGS',
-                subtitle: 'DROP',
-                tabId: 'drop-earrings',
-                imageUrl: 'https://images.unsplash.com/photo-1635767798638-3e25273a8236?q=80&w=500&auto=format&fit=crop'
-              },
-              {
-                title: 'EARRINGS',
-                subtitle: 'STUD',
-                tabId: 'stud-earrings',
-                imageUrl: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?q=80&w=500&auto=format&fit=crop'
-              },
-              {
-                title: 'RINGS',
-                subtitle: null,
-                tabId: 'rings',
-                imageUrl: 'https://images.unsplash.com/photo-1603561591411-07134e71a2a9?q=80&w=500&auto=format&fit=crop'
-              },
-              {
-                title: 'BRACELETS',
-                subtitle: null,
-                tabId: 'bracelets',
-                imageUrl: 'https://images.unsplash.com/photo-1602751584552-8ba73aad10e1?q=80&w=500&auto=format&fit=crop'
-              },
-              {
-                title: 'CUFF',
-                subtitle: 'BANGLES',
-                tabId: 'cuff-bracelets',
-                imageUrl: 'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?q=80&w=500&auto=format&fit=crop'
-              },
-              {
-                title: 'HAIR',
-                subtitle: 'ACCESSORIES',
-                tabId: 'hair-accessories',
-                imageUrl: 'https://images.unsplash.com/photo-1626784215021-2e39ac514150?q=80&w=500&auto=format&fit=crop'
-              }
-            ].map((cat, idx) => (
+            {categories.map((cat, idx) => (
               <div 
                 key={idx}
                 onClick={() => {
@@ -1599,9 +1578,16 @@ export default function App() {
 
                       {/* Rating details & Price row */}
                       <div className="pt-1.5 border-t border-espresso/5 flex items-center justify-between">
-                        <span className="text-xs sm:text-sm font-extrabold text-espresso">
-                          ₹{p.price.toLocaleString('en-IN')}
-                        </span>
+                        <div className="flex items-baseline space-x-2">
+                          <span className="text-xs sm:text-sm font-extrabold text-espresso">
+                            ₹{p.price.toLocaleString('en-IN')}
+                          </span>
+                          {p.originalPrice && p.originalPrice > p.price && (
+                            <span className="text-[10px] sm:text-xs line-through text-espresso/45 font-medium">
+                              ₹{p.originalPrice.toLocaleString('en-IN')}
+                            </span>
+                          )}
+                        </div>
 
                         <div className="flex items-center space-x-1">
                           <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
@@ -2122,17 +2108,6 @@ export default function App() {
             <ul className="text-xs text-linen/60 space-y-1.5 font-semibold">
               <li><button onClick={() => setIsTrackOrderOpen(true)} className="hover:text-terracotta transition-colors">Track Enquiry</button></li>
               <li><a href="#contact" className="hover:text-terracotta transition-colors">Submit Enquiry</a></li>
-              <li>
-                <button 
-                  onClick={() => {
-                    setViewMode('seller');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }} 
-                  className="hover:text-terracotta transition-colors text-left font-semibold cursor-pointer"
-                >
-                  Merchant Portal
-                </button>
-              </li>
             </ul>
           </div>
 
@@ -2234,7 +2209,12 @@ export default function App() {
                                 </div>
                                 <div className="min-w-0">
                                   <h4 className="font-serif text-xs font-bold text-espresso truncate max-w-[140px]">{item.product.name}</h4>
-                                  <p className="text-xs font-semibold text-espresso">₹{item.product.price.toLocaleString('en-IN')}</p>
+                                  <p className="text-xs font-semibold text-espresso flex items-center gap-1.5">
+                                    <span>₹{item.product.price.toLocaleString('en-IN')}</span>
+                                    {item.product.originalPrice && item.product.originalPrice > item.product.price && (
+                                      <span className="line-through text-[10px] text-espresso/45 font-normal">₹{item.product.originalPrice.toLocaleString('en-IN')}</span>
+                                    )}
+                                  </p>
                                 </div>
                               </div>
 
