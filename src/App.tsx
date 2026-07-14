@@ -560,13 +560,15 @@ export default function App() {
     }
 
     const subtotal = cart.reduce((acc, curr) => acc + curr.product.price * curr.quantity, 0);
+    const isFreeShipping = subtotal >= 499 || subtotal === 0;
+    const shippingFee = isFreeShipping ? 0 : 49;
     let discount = 0;
     if (appliedCoupon) {
       discount = appliedCoupon.type === 'percent' 
         ? Math.round(subtotal * (appliedCoupon.value / 100))
         : appliedCoupon.value;
     }
-    const finalTotal = Math.max(0, subtotal - discount);
+    const finalTotal = Math.max(0, subtotal - discount + shippingFee);
 
     const trackingCode = `ZL-TRACK-${Math.floor(1000 + Math.random() * 9000)}`;
     const newOrderId = `ZL-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -589,6 +591,7 @@ export default function App() {
     // Construct detailed WhatsApp message containing products and order info
     const itemsText = cart.map(item => `- ${item.product.name} x ${item.quantity} (₹${item.product.price.toLocaleString('en-IN')})`).join('\n');
     const couponText = appliedCoupon ? `\n*Coupon Code:* ${appliedCoupon.code} (-₹${discount.toLocaleString('en-IN')})` : '';
+    const shippingText = isFreeShipping ? 'FREE' : `₹${shippingFee}`;
     
     const whatsappMessage = `Hi Zerish Luxe! I just submitted a jewelry enquiry list on your website.\n\n` +
       `*Enquiry ID:* ${newOrderId}\n` +
@@ -599,6 +602,7 @@ export default function App() {
       `*Pincode:* ${checkoutDetails.postalCode}\n\n` +
       `*Enquiry Items:*\n${itemsText}\n\n` +
       `*Estimated Value:* ₹${subtotal.toLocaleString('en-IN')}${couponText}\n` +
+      `*Shipping:* ${shippingText}\n` +
       `*Total Enquiry Value:* ₹${finalTotal.toLocaleString('en-IN')}\n\n` +
       `Please contact me regarding pricing and customization of my curated pieces!`;
 
@@ -839,13 +843,15 @@ export default function App() {
 
   // Subtotal in Cart Drawer
   const cartSubtotal = cart.reduce((acc, curr) => acc + curr.product.price * curr.quantity, 0);
+  const isFreeShipping = cartSubtotal >= 499 || cartSubtotal === 0;
+  const shippingFee = isFreeShipping ? 0 : 49;
   let discountAmount = 0;
   if (appliedCoupon) {
     discountAmount = appliedCoupon.type === 'percent' 
       ? Math.round(cartSubtotal * (appliedCoupon.value / 100))
       : appliedCoupon.value;
   }
-  const grandTotal = Math.max(0, cartSubtotal - discountAmount);
+  const grandTotal = Math.max(0, cartSubtotal - discountAmount + shippingFee);
 
   // Separate Seller Portal Website View
   if (viewMode === 'seller') {
@@ -1000,16 +1006,18 @@ export default function App() {
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-espresso/10 transition-all duration-300">
         
         {/* Top announcement bar */}
-        <div className="bg-terracotta text-white text-center py-1.5 text-[9px] sm:text-[10px] uppercase tracking-widest font-bold flex items-center justify-between px-4 sm:px-8">
-          <div className="flex items-center space-x-1">
-            <span>✨</span>
-            <span className="hidden sm:inline font-medium">Handpicked with love, made to last a lifetime</span>
-            <span className="sm:hidden">Handpicked with love & made to last</span>
-            <span>✨</span>
-          </div>
-          <div className="flex items-center space-x-1.5 font-semibold text-white/95">
-            <Truck className="w-3.5 h-3.5" />
-            <span>Shipping all over India</span>
+        <div className="bg-terracotta text-white">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-1.5 text-[8px] sm:text-[9.5px] uppercase tracking-widest flex items-center justify-between w-full gap-4">
+            <div className="flex items-center space-x-1 font-semibold text-white/95">
+              <span className="text-[9px] sm:text-[10px] leading-none">✨</span>
+              <span className="hidden sm:inline">Handpicked with love, made to last a lifetime</span>
+              <span className="sm:hidden">Handpicked with love</span>
+              <span className="text-[9px] sm:text-[10px] leading-none">✨</span>
+            </div>
+            <div className="flex items-center space-x-1 font-semibold text-white/95 shrink-0">
+              <Truck className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
+              <span>FREE SHIPPING ABOVE ₹499 (India)</span>
+            </div>
           </div>
         </div>
 
@@ -1018,22 +1026,22 @@ export default function App() {
           
           {/* Logo element left */}
           <div 
-            className="flex flex-col items-start lg:items-center cursor-pointer select-none" 
+            className="flex flex-col items-center cursor-pointer select-none" 
             onClick={() => {
               setViewMode('customer');
               window.scrollTo({ top: 0, behavior: 'smooth' });
               setActiveTab('best-sellers');
             }}
           >
-            <span className="font-serif text-xl sm:text-2xl lg:text-3xl font-light tracking-[0.25em] lg:tracking-[0.2em] text-espresso uppercase leading-none">
+            <span className="font-serif text-xl sm:text-2xl lg:text-3xl font-light tracking-[0.25em] pl-[0.25em] text-espresso uppercase leading-none">
               ZERISH
             </span>
-            <div className="flex items-center justify-start lg:justify-center w-full mt-1.5">
-              <div className="hidden lg:block h-[0.5px] w-5 bg-espresso/30"></div>
-              <span className="text-[8px] sm:text-[9px] tracking-[0.4em] text-espresso/80 font-bold uppercase px-0 lg:px-2.5 pr-2.5 lg:pr-0 leading-none">
+            <div className="flex items-center justify-center w-full mt-1.5 gap-1.5">
+              <div className="h-[0.5px] w-4 sm:w-5 bg-espresso/30"></div>
+              <span className="text-[10px] sm:text-[11.5px] tracking-[0.35em] pl-[0.35em] text-espresso/80 font-bold uppercase leading-none shrink-0">
                 LUXE
               </span>
-              <div className="h-[0.5px] w-8 lg:w-5 bg-espresso/30"></div>
+              <div className="h-[0.5px] w-4 sm:w-5 bg-espresso/30"></div>
             </div>
           </div>
 
@@ -1373,7 +1381,7 @@ export default function App() {
               <Truck className="w-6 h-6 text-espresso/85 stroke-[1.2]" />
               <div>
                 <p className="text-[10px] uppercase tracking-widest font-extrabold text-espresso">Shipping All Over India</p>
-                <p className="text-[8px] tracking-wider text-taupe uppercase font-semibold mt-0.5">Safe & Reliable Delivery</p>
+                <p className="text-[8px] tracking-wider text-taupe uppercase font-semibold mt-0.5">FREE SHIPPING ABOVE ₹499</p>
               </div>
             </div>
 
@@ -2448,6 +2456,30 @@ export default function App() {
                   {/* Drawer Footer Accounting - Only show when not checked out success */}
                   {cart.length > 0 && !checkoutSuccess && (
                     <div className="p-6 border-t border-espresso/15 space-y-4 bg-[#FAF8F6]">
+                      
+                      {/* Free Shipping Progress Indicator */}
+                      <div className="bg-white p-3 border border-espresso/10 rounded-xs space-y-2 text-center shadow-2xs">
+                        {isFreeShipping ? (
+                          <p className="text-[10px] text-emerald-700 font-extrabold uppercase tracking-wider flex items-center justify-center gap-1.5">
+                            <span>✨</span>
+                            <span>FREE shipping unlocked!</span>
+                            <span>✨</span>
+                          </p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            <p className="text-[10px] text-taupe uppercase tracking-wider font-bold">
+                              Add <span className="text-terracotta font-extrabold">₹{499 - cartSubtotal}</span> more for <span className="font-black text-espresso">FREE Shipping</span>
+                            </p>
+                            <div className="w-full bg-espresso/5 h-1.5 rounded-full overflow-hidden">
+                              <div 
+                                className="bg-terracotta h-full transition-all duration-500 rounded-full"
+                                style={{ width: `${Math.min(100, (cartSubtotal / 499) * 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
                       <div className="space-y-1.5 text-xs text-espresso">
                         <div className="flex justify-between">
                           <span className="text-taupe">Items subtotal:</span>
@@ -2459,6 +2491,12 @@ export default function App() {
                             <span>-₹{discountAmount.toLocaleString('en-IN')}</span>
                           </div>
                         )}
+                        <div className="flex justify-between">
+                          <span className="text-taupe">Shipping:</span>
+                          <span className={isFreeShipping ? "text-emerald-600 font-extrabold text-[10px] uppercase tracking-wider" : "font-semibold"}>
+                            {isFreeShipping ? 'FREE' : `₹${shippingFee}`}
+                          </span>
+                        </div>
                         <div className="flex justify-between text-sm font-bold pt-2 border-t border-espresso/10">
                           <span>Estimated Value:</span>
                           <span>₹{grandTotal.toLocaleString('en-IN')}</span>
