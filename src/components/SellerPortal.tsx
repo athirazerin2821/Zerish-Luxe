@@ -83,6 +83,11 @@ export default function SellerPortal({
   const [isBestBadge, setIsBestBadge] = useState(false);
   const [uploading, setUploading] = useState(false);
 
+  // Multiple images state
+  const [additionalImages, setAdditionalImages] = useState<string[]>([]);
+  const [addImgUrlInput, setAddImgUrlInput] = useState('');
+  const [additionalUploading, setAdditionalUploading] = useState(false);
+
   const compressImageToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -156,6 +161,45 @@ export default function SellerPortal({
     }
   };
 
+  const handleAdditionalImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAdditionalUploading(true);
+    try {
+      const { uploadProductImage } = await import('../services/firebaseDb');
+      const url = await Promise.race([
+        uploadProductImage(file),
+        new Promise<string>((_, reject) => 
+          setTimeout(() => reject(new Error('TIMEOUT')), 3.500)
+        )
+      ]);
+      setAdditionalImages(prev => [...prev, url]);
+      alert('Additional product image uploaded successfully!');
+    } catch (error) {
+      console.warn('Firebase Storage upload failed or timed out. Falling back to base64 compression.', error);
+      try {
+        const base64Url = await compressImageToBase64(file);
+        setAdditionalImages(prev => [...prev, base64Url]);
+        alert('Additional product image processed and saved locally successfully!');
+      } catch (compressErr) {
+        console.error('Compression failed:', compressErr);
+        alert('Error processing file.');
+      }
+    } finally {
+      setAdditionalUploading(false);
+    }
+  };
+
+  const handleAddAdditionalUrl = () => {
+    if (!addImgUrlInput.trim()) return;
+    setAdditionalImages(prev => [...prev, addImgUrlInput.trim()]);
+    setAddImgUrlInput('');
+  };
+
+  const handleRemoveAdditionalImage = (index: number) => {
+    setAdditionalImages(prev => prev.filter((_, i) => i !== index));
+  };
+
   // Editing state (Inline)
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -197,13 +241,16 @@ export default function SellerPortal({
 
     setIsAdding(true);
     try {
+      const primaryUrl = customImg.trim() || newProdImg;
+      const allThumbnails = [primaryUrl, ...additionalImages].filter(Boolean);
+
       await onAddProduct({
         name: newProdName,
         category: newProdCategory,
         price: Number(newProdPrice),
         description: newProdDesc || `${newProdName} - handpicked luxury fine jewelry. Waterproof, sweatproof, and anti-tarnish designed for everyday elegance.`,
-        imageUrl: customImg.trim() || newProdImg,
-        thumbnails: [customImg.trim() || newProdImg],
+        imageUrl: primaryUrl,
+        thumbnails: allThumbnails,
         stock: Number(newProdStock),
         material: newProdMaterial,
         dimensions: newProdDims,
@@ -220,6 +267,7 @@ export default function SellerPortal({
       setNewProdDesc('');
       setCustomImg('');
       setNewProdDims('');
+      setAdditionalImages([]);
       alert('Bespoke Listing Added Successfully!');
     } catch (error: any) {
       console.error(error);
@@ -716,6 +764,77 @@ export default function SellerPortal({
                                 </p>
                               )}
                               {uploading && (
+                                <div className="mt-1 flex items-center justify-center space-x-1">
+                                  <span className="w-1.5 h-1.5 bg-terracotta rounded-full animate-bounce"></span>
+                                  <span className="w-1.5 h-1.5 bg-terracotta rounded-full animate-bounce delay-75"></span>
+                                  <span className="w-1.5 h-1.5 bg-terracotta rounded-full animate-bounce delay-150"></span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Additional Images / Thumbnails */}
+                          <div className="space-y-2 border-t border-espresso/10 pt-3">
+                            <div className="flex items-center justify-between">
+                              <label className="block text-[9px] uppercase tracking-wider font-extrabold text-espresso">
+                                Additional Images ({additionalImages.length})
+                              </label>
+                              <span className="text-[8px] text-taupe font-semibold uppercase tracking-wider">Supports Zoom view</span>
+                            </div>
+
+                            {/* Render already added additional images */}
+                            {additionalImages.length > 0 && (
+                              <div className="grid grid-cols-5 gap-1.5 p-2 bg-white border border-espresso/10 rounded-xs">
+                                {additionalImages.map((img, idx) => (
+                                  <div key={idx} className="relative aspect-square group border border-espresso/5 rounded-xs overflow-hidden">
+                                    <img src={img} className="w-full h-full object-cover" />
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveAdditionalImage(idx)}
+                                      className="absolute inset-0 bg-rose-600/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-[9px] font-extrabold uppercase tracking-widest cursor-pointer"
+                                      title="Remove image"
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Add Additional Image input field and button */}
+                            <div className="flex space-x-1.5">
+                              <input 
+                                type="url" 
+                                placeholder="Paste additional image Unsplash URL..."
+                                value={addImgUrlInput}
+                                onChange={(e) => setAddImgUrlInput(e.target.value)}
+                                className="flex-1 border border-espresso/20 p-2 text-[11px] text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                              />
+                              <button
+                                type="button"
+                                onClick={handleAddAdditionalUrl}
+                                className="px-3 py-2 bg-espresso hover:bg-terracotta text-[#FAF8F6] text-[9px] uppercase tracking-widest font-extrabold transition-colors cursor-pointer whitespace-nowrap"
+                              >
+                                Add URL
+                              </button>
+                            </div>
+
+                            {/* File Upload to Firebase for additional images */}
+                            <div className="bg-white border border-dashed border-espresso/20 p-2.5 text-center">
+                              <input 
+                                type="file" 
+                                accept="image/*"
+                                onChange={handleAdditionalImageUpload}
+                                className="hidden"
+                                id="additional-file-upload"
+                              />
+                              <label 
+                                htmlFor="additional-file-upload"
+                                className="inline-block px-3 py-1 bg-espresso/5 hover:bg-espresso/10 border border-espresso/15 text-[9px] uppercase tracking-wider font-bold text-espresso cursor-pointer transition-colors"
+                              >
+                                {additionalUploading ? 'Uploading...' : 'Upload Image File'}
+                              </label>
+                              {additionalUploading && (
                                 <div className="mt-1 flex items-center justify-center space-x-1">
                                   <span className="w-1.5 h-1.5 bg-terracotta rounded-full animate-bounce"></span>
                                   <span className="w-1.5 h-1.5 bg-terracotta rounded-full animate-bounce delay-75"></span>
