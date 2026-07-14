@@ -24,7 +24,9 @@ import {
   ArrowRight,
   Droplet,
   Award,
-  ChevronDown
+  ChevronDown,
+  Home,
+  LayoutGrid
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -233,6 +235,7 @@ export default function App() {
   const [isTrackOrderOpen, setIsTrackOrderOpen] = useState(false);
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
   const [isTermsOpen, setIsTermsOpen] = useState(false);
+  const [isMobileCategoriesOpen, setIsMobileCategoriesOpen] = useState(false);
 
   // --- SEPARATION OF WEBSITE MODE ---
   const [viewMode, setViewMode] = useState<'customer' | 'seller'>(() => {
@@ -989,7 +992,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F7F1F0] text-espresso selection:bg-terracotta selection:text-white font-sans">
+    <div className="min-h-screen bg-[#F7F1F0] text-espresso selection:bg-terracotta selection:text-white font-sans pb-16 lg:pb-0">
       
       {/* ======================================================== */}
       {/* --- PREMIUM HEADER --- */}
@@ -1011,25 +1014,26 @@ export default function App() {
         </div>
 
         {/* Navigation Core */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 sm:py-3.5 flex flex-col lg:flex-row items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 sm:py-3.5 flex flex-row items-center justify-between gap-4 w-full">
           
           {/* Logo element left */}
           <div 
-            className="flex flex-col items-center cursor-pointer select-none" 
+            className="flex flex-col items-start lg:items-center cursor-pointer select-none" 
             onClick={() => {
+              setViewMode('customer');
               window.scrollTo({ top: 0, behavior: 'smooth' });
               setActiveTab('best-sellers');
             }}
           >
-            <span className="font-serif text-2xl sm:text-3xl font-light tracking-[0.2em] text-espresso uppercase leading-none">
+            <span className="font-serif text-xl sm:text-2xl lg:text-3xl font-light tracking-[0.25em] lg:tracking-[0.2em] text-espresso uppercase leading-none">
               ZERISH
             </span>
-            <div className="flex items-center justify-center w-full mt-1.5">
-              <div className="h-[0.5px] w-5 bg-espresso/30"></div>
-              <span className="text-[8px] sm:text-[9px] tracking-[0.4em] text-espresso/80 font-bold uppercase px-2.5 leading-none">
+            <div className="flex items-center justify-start lg:justify-center w-full mt-1.5">
+              <div className="hidden lg:block h-[0.5px] w-5 bg-espresso/30"></div>
+              <span className="text-[8px] sm:text-[9px] tracking-[0.4em] text-espresso/80 font-bold uppercase px-0 lg:px-2.5 pr-2.5 lg:pr-0 leading-none">
                 LUXE
               </span>
-              <div className="h-[0.5px] w-5 bg-espresso/30"></div>
+              <div className="h-[0.5px] w-8 lg:w-5 bg-espresso/30"></div>
             </div>
           </div>
 
@@ -1130,27 +1134,46 @@ export default function App() {
       {/* ======================================================== */}
       {/* --- LUXURY HERO LANDING SECTION WITH DOT NAVIGATION --- */}
       {/* ======================================================== */}
-      <section className="relative min-h-[85vh] lg:h-[calc(100vh-100px)] flex items-center overflow-hidden bg-[#FAF8F6] border-b border-espresso/5">
+      <section className="relative flex flex-col lg:flex-row lg:items-center min-h-0 lg:h-[calc(100vh-100px)] overflow-hidden bg-[#FAF8F6] border-b border-espresso/5">
         
         {/* Background Frames with premium cross-fade transition */}
-        <div className="absolute inset-0 z-0">
+        <div className="relative lg:absolute w-full h-64 sm:h-80 md:h-96 lg:h-full lg:inset-0 z-0 shrink-0 overflow-hidden">
           {HERO_FRAMES.map((src, idx) => (
-            <motion.img 
+            <img 
               key={idx}
               src={src} 
               alt={`Luxury gold jewelry frame ${idx + 1}`}
-              initial={{ opacity: idx === 0 ? 1 : 0 }}
-              animate={{ opacity: currentFrame === idx ? 1 : 0 }}
-              transition={{ duration: 1.2, ease: "easeInOut" }}
-              className="absolute inset-0 w-full h-full object-cover object-center lg:object-right"
+              className={`absolute inset-0 w-full h-full object-cover object-center lg:object-right transition-opacity duration-[1200ms] ease-in-out ${
+                currentFrame === idx ? 'opacity-100 scale-100' : 'opacity-0 scale-105 pointer-events-none'
+              }`}
+              style={{ transitionProperty: 'opacity, transform' }}
               referrerPolicy="no-referrer"
             />
           ))}
+          {/* Soft premium ambient overlay to ensure beautiful contrast */}
+          <div className="absolute inset-0 bg-white/10 lg:bg-transparent z-[1]" />
+
+          {/* Slide Indicator Dots - nested inside the image block for perfect alignment on mobile and desktop */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center space-x-3 bg-white/70 backdrop-blur-md px-4 py-2 rounded-full border border-espresso/10 shadow-sm">
+            {HERO_FRAMES.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => setCurrentFrame(idx)}
+                className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                  currentFrame === idx 
+                    ? 'bg-terracotta w-5' 
+                    : 'bg-espresso/30 hover:bg-espresso/60'
+                }`}
+                aria-label={`Go to slide ${idx + 1}`}
+                title={`View slide ${idx + 1}`}
+              />
+            ))}
+          </div>
         </div>
 
         {/* Content Overlay */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full py-16 lg:py-24">
-          <div className="max-w-xl space-y-6 sm:space-y-8 bg-white/70 sm:bg-white/40 backdrop-blur-xs sm:backdrop-blur-none p-6 sm:p-0 rounded-xs border border-espresso/5 sm:border-none shadow-lg sm:shadow-none">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full py-8 sm:py-12 lg:py-24">
+          <div className="max-w-xl space-y-6 sm:space-y-8 bg-transparent p-2 sm:p-0 rounded-none border-none shadow-none">
             
             <div className="flex items-center space-x-2 text-terracotta text-xs uppercase tracking-[0.2em] font-bold">
               <span>✦</span>
@@ -1232,23 +1255,6 @@ export default function App() {
             </div>
 
           </div>
-        </div>
-
-        {/* Slide Indicator Dots */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex items-center space-x-3 bg-white/50 backdrop-blur-md px-5 py-2.5 rounded-full border border-espresso/10 shadow-sm">
-          {HERO_FRAMES.map((_, idx) => (
-            <button
-              key={idx}
-              onClick={() => setCurrentFrame(idx)}
-              className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
-                currentFrame === idx 
-                  ? 'bg-terracotta w-6' 
-                  : 'bg-espresso/30 hover:bg-espresso/60'
-              }`}
-              aria-label={`Go to slide ${idx + 1}`}
-              title={`View slide ${idx + 1}`}
-            />
-          ))}
         </div>
 
       </section>
@@ -1582,7 +1588,7 @@ export default function App() {
                         
                         {/* Material label */}
                         <p className="text-[9px] text-taupe uppercase font-semibold">
-                          {p.material || '316 Stainless Steel • 18k PVD'}
+                          {p.material || '316L Stainless Steel • 18k PVD'}
                         </p>
                       </div>
 
@@ -1663,10 +1669,6 @@ export default function App() {
               
               {/* Header */}
               <div className="space-y-3">
-                <p className="text-xs uppercase tracking-[0.25em] text-terracotta font-bold flex items-center gap-2">
-                  <span>✦</span>
-                  <span>Our Heritage & Spirit</span>
-                </p>
                 <h2 className="font-serif text-3xl sm:text-5xl font-light text-espresso leading-tight">
                   About Zerish Luxe
                 </h2>
@@ -1719,7 +1721,7 @@ export default function App() {
               {/* Behind the Brand */}
               <div className="border-t border-espresso/15 pt-8 space-y-6">
                 <div className="space-y-2">
-                  <h3 className="font-serif text-xl sm:text-2xl font-normal text-espresso">
+                  <h3 className="font-serif text-xl sm:text-2xl font-semibold text-terracotta tracking-wide">
                     Behind the Brand
                   </h3>
                 </div>
@@ -2115,6 +2117,17 @@ export default function App() {
             <ul className="text-xs text-linen/60 space-y-1.5 font-semibold">
               <li><button onClick={() => setIsTrackOrderOpen(true)} className="hover:text-terracotta transition-colors">Track Enquiry</button></li>
               <li><a href="#contact" className="hover:text-terracotta transition-colors">Submit Enquiry</a></li>
+              <li>
+                <button 
+                  onClick={() => {
+                    setViewMode('seller');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }} 
+                  className="hover:text-terracotta transition-colors text-left font-semibold cursor-pointer"
+                >
+                  Merchant Portal
+                </button>
+              </li>
             </ul>
           </div>
 
@@ -2565,7 +2578,161 @@ export default function App() {
         onClose={() => setIsTermsOpen(false)}
       />
 
+      {/* MOBILE CATEGORIES BOTTOM SHEET */}
+      <AnimatePresence>
+        {isMobileCategoriesOpen && (
+          <div className="fixed inset-0 z-50 overflow-hidden lg:hidden">
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-espresso/60 backdrop-blur-xs transition-opacity" 
+              onClick={() => setIsMobileCategoriesOpen(false)}
+            />
+            
+            {/* Bottom Sheet Panel */}
+            <motion.div 
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="absolute bottom-0 left-0 right-0 bg-[#FAF8F6] border-t border-espresso/15 rounded-t-2xl shadow-2xl max-h-[80vh] overflow-y-auto no-scrollbar pb-8"
+            >
+              {/* Sheet Handle */}
+              <div className="flex justify-center py-3">
+                <div className="w-12 h-1 bg-espresso/20 rounded-full"></div>
+              </div>
 
+              {/* Sheet Header */}
+              <div className="px-6 pb-4 border-b border-espresso/10 flex items-center justify-between">
+                <h3 className="font-serif text-lg font-normal tracking-wide text-espresso uppercase">
+                  Select Category
+                </h3>
+                <button 
+                  onClick={() => setIsMobileCategoriesOpen(false)}
+                  className="p-1 rounded-full text-espresso hover:bg-espresso/10 transition-colors"
+                >
+                  <X className="w-4.5 h-4.5" />
+                </button>
+              </div>
+
+              {/* Category Grid List */}
+              <div className="p-6 grid grid-cols-2 gap-3.5">
+                {[
+                  { id: 'best-sellers', label: 'Best Sellers', count: 'Hot' },
+                  { id: 'gift-collection', label: 'Gift Collection', count: 'New' },
+                  { id: 'chains', label: 'Chains', count: null },
+                  { id: 'necklaces', label: 'Necklaces', count: null },
+                  { id: 'rings', label: 'Rings', count: null },
+                  { id: 'bracelets', label: 'Bracelets', count: null },
+                  { id: 'cuff-bracelets', label: 'Cuff Bangles', count: null },
+                  { id: 'drop-earrings', label: 'Drop Earrings', count: null },
+                  { id: 'stud-earrings', label: 'Stud Earrings', count: null },
+                  { id: 'hair-accessories', label: 'Hair Accessories', count: null }
+                ].map(item => (
+                  <button 
+                    key={item.id}
+                    onClick={() => {
+                      setViewMode('customer');
+                      setActiveTab(item.id as any);
+                      setIsMobileCategoriesOpen(false);
+                      setTimeout(() => {
+                        const el = document.getElementById('shop');
+                        if (el) {
+                          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
+                      }, 100);
+                    }}
+                    className={`relative p-4 rounded-xs border text-left transition-all flex flex-col justify-between h-20 ${
+                      activeTab === item.id && viewMode === 'customer'
+                        ? 'border-terracotta bg-white shadow-sm'
+                        : 'border-espresso/10 bg-white hover:border-espresso'
+                    }`}
+                  >
+                    <span className="text-[10px] uppercase tracking-widest font-extrabold text-espresso">
+                      {item.label}
+                    </span>
+                    {item.count && (
+                      <span className="absolute top-2 right-2 bg-terracotta text-white text-[7px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-widest">
+                        {item.count}
+                      </span>
+                    )}
+                    <span className="text-[9px] text-espresso/40 font-semibold self-end">
+                      Explore ✦
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MOBILE PERSISTENT BOTTOM NAVIGATION */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-espresso/10 py-2.5 px-6 flex items-center justify-between shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
+        
+        {/* Home Button */}
+        <button 
+          onClick={() => {
+            setViewMode('customer');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            setActiveTab('best-sellers');
+          }}
+          className={`flex flex-col items-center space-y-1 py-1 px-3 rounded-md transition-colors cursor-pointer ${
+            viewMode === 'customer' && !isMobileCategoriesOpen
+              ? 'text-terracotta'
+              : 'text-espresso/60 hover:text-espresso'
+          }`}
+        >
+          <Home className="w-5 h-5 stroke-[1.8]" />
+          <span className="text-[9px] uppercase tracking-wider font-extrabold">Home</span>
+        </button>
+
+        {/* Categories Button */}
+        <button 
+          onClick={() => {
+            setIsMobileCategoriesOpen(true);
+          }}
+          className={`flex flex-col items-center space-y-1 py-1 px-3 rounded-md transition-colors cursor-pointer ${
+            isMobileCategoriesOpen
+              ? 'text-terracotta'
+              : 'text-espresso/60 hover:text-espresso'
+          }`}
+        >
+          <LayoutGrid className="w-5 h-5 stroke-[1.8]" />
+          <span className="text-[9px] uppercase tracking-wider font-extrabold">Categories</span>
+        </button>
+
+        {/* Wishlist Button */}
+        <button 
+          onClick={() => setIsWishlistOpen(true)}
+          className="flex flex-col items-center space-y-1 py-1 px-3 rounded-md text-espresso/60 hover:text-espresso transition-colors relative cursor-pointer"
+        >
+          <Heart className="w-5 h-5 stroke-[1.8]" />
+          {wishlist.length > 0 && (
+            <span className="absolute top-0 right-3 bg-terracotta text-white text-[8px] font-extrabold w-3.5 h-3.5 rounded-full flex items-center justify-center">
+              {wishlist.length}
+            </span>
+          )}
+          <span className="text-[9px] uppercase tracking-wider font-extrabold">Wishlist</span>
+        </button>
+
+        {/* Cart Button */}
+        <button 
+          onClick={() => setIsCartOpen(true)}
+          className="flex flex-col items-center space-y-1 py-1 px-3 rounded-md text-espresso/60 hover:text-espresso transition-colors relative cursor-pointer"
+        >
+          <ShoppingBag className="w-5 h-5 stroke-[1.8]" />
+          {cart.length > 0 && (
+            <span className="absolute top-0 right-3 bg-espresso text-white text-[8px] font-extrabold w-3.5 h-3.5 rounded-full flex items-center justify-center">
+              {cart.reduce((sum, it) => sum + it.quantity, 0)}
+            </span>
+          )}
+          <span className="text-[9px] uppercase tracking-wider font-extrabold">Cart</span>
+        </button>
+
+      </div>
 
     </div>
   );
