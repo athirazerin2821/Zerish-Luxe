@@ -12,7 +12,9 @@ import {
   HelpCircle,
   Award,
   Truck,
-  Heart
+  Heart,
+  ZoomIn,
+  ZoomOut
 } from 'lucide-react';
 import { Product } from '../types';
 
@@ -39,49 +41,65 @@ export default function ProductModal({
     : [product.imageUrl];
   const [activeImgIdx, setActiveImgIdx] = useState(0);
 
-  // Zoom effect on hover
-  const [zoomStyle, setZoomStyle] = useState<React.CSSProperties>({ display: 'none' });
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - left) / width) * 100;
-    const y = ((e.clientY - top) / height) * 100;
-    setZoomStyle({
-      display: 'block',
-      backgroundImage: `url(${imageList[activeImgIdx]})`,
-      backgroundPosition: `${x}% ${y}%`,
-      backgroundSize: '200%'
-    });
-  };
-  const handleMouseLeave = () => {
-    setZoomStyle({ display: 'none' });
+  // Unified Zoom State
+  const [zoomScale, setZoomScale] = useState(1);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const isPanning = useRef(false);
+  const panStart = useRef({ x: 0, y: 0 });
+
+  const handleZoomIn = () => {
+    setZoomScale(prev => Math.min(prev + 0.5, 4));
   };
 
-  // 360 viewer state
-  const [is360Active, setIs360Active] = useState(false);
-  const [rotation, setRotation] = useState(0); // degrees 0-359
-  const isDragging = useRef(false);
-  const startX = useRef(0);
-
-  const handleDragStart = (e: React.MouseEvent) => {
-    isDragging.current = true;
-    startX.current = e.clientX;
-  };
-
-  const handleDragMove = (e: React.MouseEvent) => {
-    if (!isDragging.current) return;
-    const diff = e.clientX - startX.current;
-    // Rotate 1 degree per 2 pixels
-    const rotDiff = Math.round(diff / 2);
-    setRotation(prev => {
-      let next = (prev + rotDiff) % 360;
-      if (next < 0) next += 360;
+  const handleZoomOut = () => {
+    setZoomScale(prev => {
+      const next = Math.max(prev - 0.5, 1);
+      if (next === 1) {
+        setPanOffset({ x: 0, y: 0 });
+      }
       return next;
     });
-    startX.current = e.clientX;
   };
 
-  const handleDragEnd = () => {
-    isDragging.current = false;
+  const handleZoomReset = () => {
+    setZoomScale(1);
+    setPanOffset({ x: 0, y: 0 });
+  };
+
+  const handlePanStart = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
+    if (zoomScale <= 1) return;
+    isPanning.current = true;
+    
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    
+    panStart.current = {
+      x: clientX - panOffset.x,
+      y: clientY - panOffset.y
+    };
+  };
+
+  const handlePanMove = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
+    if (!isPanning.current || zoomScale <= 1) return;
+    
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    
+    const newX = clientX - panStart.current.x;
+    const newY = clientY - panStart.current.y;
+    
+    // Bounds restriction based on zoom level to prevent dragging too far off-screen
+    const maxBoundX = (zoomScale - 1) * 200;
+    const maxBoundY = (zoomScale - 1) * 200;
+    
+    setPanOffset({
+      x: Math.max(-maxBoundX, Math.min(maxBoundX, newX)),
+      y: Math.max(-maxBoundY, Math.min(maxBoundY, newY))
+    });
+  };
+
+  const handlePanEnd = () => {
+    isPanning.current = false;
   };
 
   // Accordion details
@@ -150,72 +168,40 @@ export default function ProductModal({
         <div className="lg:col-span-5 space-y-4">
           
           {/* Main Visual Frame */}
-          <div className="relative aspect-square bg-[#FAF8F6] border border-espresso/10 overflow-hidden rounded-sm">
-            {is360Active ? (
-              // 360 interactive rotation drag board
-              <div 
-                onMouseDown={handleDragStart}
-                onMouseMove={handleDragMove}
-                onMouseUp={handleDragEnd}
-                onMouseLeave={handleDragEnd}
-                className="w-full h-full flex flex-col items-center justify-center cursor-ew-resize relative select-none"
-              >
-                {/* Simulated Rotated Image via skew/scale transforms & gloss layers */}
-                <div 
-                  className="w-3/4 h-3/4 transition-transform duration-75 relative"
-                  style={{ 
-                    transform: `rotateY(${rotation}degrees)`, 
-                    perspective: '1000px'
-                  }}
-                >
-                  <img 
-                    src={imageList[activeImgIdx]} 
-                    alt={product.name} 
-                    className="w-full h-full object-cover rounded-sm pointer-events-none" 
-                  />
-                  {/* Gloss glare reflection layer */}
-                  <div 
-                    className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/30 to-transparent pointer-events-none"
-                    style={{
-                      transform: `translateX(${(rotation % 180) - 90}px)`,
-                      opacity: Math.max(0.1, Math.min(0.6, Math.abs(180 - (rotation % 360)) / 180))
-                    }}
-                  />
-                </div>
+          <div className="relative aspect-square bg-[#FAF8F6] border border-espresso/10 overflow-hidden rounded-sm select-none">
+            {/* Interactive Zoom and Pan Board */}
+            <div 
+              onMouseDown={handlePanStart}
+              onMouseMove={handlePanMove}
+              onMouseUp={handlePanEnd}
+              onMouseLeave={handlePanEnd}
+              onTouchStart={handlePanStart}
+              onTouchMove={handlePanMove}
+              onTouchEnd={handlePanEnd}
+              onDoubleClick={() => zoomScale > 1 ? handleZoomReset() : setZoomScale(2.5)}
+              className="relative w-full h-full overflow-hidden flex items-center justify-center"
+              style={{ cursor: zoomScale > 1 ? 'grab' : 'zoom-in' }}
+            >
+              <img 
+                src={imageList[activeImgIdx]} 
+                alt={product.name} 
+                className="w-full h-full object-cover rounded-sm pointer-events-none"
+                style={{
+                  transform: `scale(${zoomScale}) translate(${panOffset.x / zoomScale}px, ${panOffset.y / zoomScale}px)`,
+                  transformOrigin: 'center center',
+                  transition: isPanning.current ? 'none' : 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
+                }}
+                referrerPolicy="no-referrer"
+              />
 
-                {/* Info Overlay */}
-                <div className="absolute bottom-4 inset-x-0 flex items-center justify-center space-x-1 text-[10px] text-taupe font-bold uppercase tracking-wider bg-white/70 py-1.5 px-3 rounded-full max-w-xs mx-auto backdrop-blur-xs">
-                  <RotateCw className="w-3 h-3 text-terracotta animate-spin" />
-                  <span>Drag left/right to rotate ({rotation}°)</span>
+              {zoomScale > 1 && (
+                <div className="absolute inset-x-0 bottom-14 text-center pointer-events-none z-10">
+                  <span className="bg-espresso/80 text-[#FAF8F6] text-[8px] uppercase tracking-widest font-extrabold px-2.5 py-1 rounded-full backdrop-blur-xs shadow-xs animate-pulse">
+                    Drag or swipe to pan
+                  </span>
                 </div>
-              </div>
-            ) : (
-              // Static Image with magnifier hover zoom effect
-              <div 
-                onMouseMove={handleMouseMove}
-                onMouseLeave={handleMouseLeave}
-                className="relative w-full h-full cursor-zoom-in"
-              >
-                <img 
-                  src={imageList[activeImgIdx]} 
-                  alt={product.name} 
-                  className="w-full h-full object-cover rounded-sm"
-                  referrerPolicy="no-referrer"
-                />
-
-                {/* Magnifier glass lens overlay */}
-                <div 
-                  className="absolute pointer-events-none border border-espresso/15 shadow-xl w-36 h-36 rounded-full"
-                  style={{
-                    ...zoomStyle,
-                    position: 'absolute',
-                    transform: 'translate(-50%, -50%)',
-                    top: '50%',
-                    left: '50%'
-                  }}
-                />
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Badges */}
             <div className="absolute top-3 left-3 flex flex-col space-y-1.5 z-10">
@@ -228,6 +214,40 @@ export default function ProductModal({
                 <span className="bg-espresso text-[#FAF8F6] text-[8px] uppercase tracking-widest font-extrabold px-2.5 py-1 shadow-xs">
                   Best Seller
                 </span>
+              )}
+            </div>
+
+            {/* Float Zoom Controls */}
+            <div className="absolute bottom-3 left-3 flex items-center space-x-1 z-10 bg-white/90 backdrop-blur-xs border border-espresso/10 p-1 rounded-sm shadow-xs">
+              <button
+                type="button"
+                onClick={handleZoomOut}
+                disabled={zoomScale <= 1}
+                className="p-1 text-espresso hover:text-terracotta disabled:opacity-30 disabled:hover:text-espresso transition-colors cursor-pointer"
+                title="Zoom Out"
+              >
+                <ZoomOut className="w-4 h-4" />
+              </button>
+              <span className="text-[9px] font-mono font-bold text-espresso px-1">
+                {Math.round(zoomScale * 100)}%
+              </span>
+              <button
+                type="button"
+                onClick={handleZoomIn}
+                disabled={zoomScale >= 4}
+                className="p-1 text-espresso hover:text-terracotta disabled:opacity-30 disabled:hover:text-espresso transition-colors cursor-pointer"
+                title="Zoom In"
+              >
+                <ZoomIn className="w-4 h-4" />
+              </button>
+              {zoomScale > 1 && (
+                <button
+                  type="button"
+                  onClick={handleZoomReset}
+                  className="p-1 text-[8px] uppercase tracking-wider font-extrabold text-terracotta hover:bg-espresso hover:text-white px-1.5 py-0.5 rounded-xs transition-all ml-1 cursor-pointer"
+                >
+                  Reset
+                </button>
               )}
             </div>
 
@@ -248,10 +268,10 @@ export default function ProductModal({
                 key={index}
                 onClick={() => {
                   setActiveImgIdx(index);
-                  setIs360Active(false);
+                  handleZoomReset();
                 }}
                 className={`w-14 h-14 border rounded-sm overflow-hidden flex-shrink-0 transition-all ${
-                  activeImgIdx === index && !is360Active
+                  activeImgIdx === index
                     ? 'border-terracotta ring-1 ring-terracotta'
                     : 'border-espresso/15 hover:opacity-100 opacity-70'
                 }`}
@@ -259,19 +279,6 @@ export default function ProductModal({
                 <img src={url} alt={`Thumb ${index + 1}`} className="w-full h-full object-cover" />
               </button>
             ))}
-
-            {/* 360 button */}
-            <button
-              onClick={() => setIs360Active(prev => !prev)}
-              className={`h-14 px-3 border rounded-sm flex flex-col items-center justify-center flex-shrink-0 text-[10px] font-bold tracking-widest uppercase transition-all ${
-                is360Active
-                  ? 'bg-terracotta text-white border-terracotta'
-                  : 'border-espresso/15 text-espresso bg-[#FAF8F6] hover:bg-linen/20'
-              }`}
-            >
-              <RotateCw className="w-4 h-4 mb-0.5" />
-              <span>360°</span>
-            </button>
           </div>
 
           {/* Feature icons */}
