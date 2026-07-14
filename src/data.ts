@@ -7,6 +7,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     name: 'Herringbone Flat Chain',
     category: 'chains',
     price: 1899,
+    originalPrice: 2499,
     description: 'A sleek, fluid 18k gold-plated chain that rests gracefully against the collarbone. Engineered with a flat snake design that reflects light at every angle. Waterproof and sweatproof for continuous daily wear.',
     imageUrl: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?q=80&w=600&auto=format&fit=crop',
     thumbnails: [
@@ -87,6 +88,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     name: 'Aurelia Solitaire Pendant',
     category: 'necklaces',
     price: 1499,
+    originalPrice: 1999,
     description: 'A dainty, ultra-fine cable chain supporting a single, hand-set flawless cubic zirconia solitaire. Designed to be layered or worn as an everyday whisper of luxury. Waterproof and skin friendly.',
     imageUrl: 'https://images.unsplash.com/photo-1611085583191-a3b1a30d5a41?q=80&w=600&auto=format&fit=crop',
     thumbnails: [
