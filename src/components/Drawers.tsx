@@ -110,7 +110,12 @@ export function SearchDrawer({ isOpen, onClose, products, onSelectProduct, onAdd
                         <div className="min-w-0">
                           <h4 className="font-serif text-xs font-bold text-espresso truncate">{p.name}</h4>
                           <p className="text-[9px] uppercase text-taupe">{p.category === 'cuff-bracelets' ? 'Cuff Bangles' : p.category.replace('-', ' ')}</p>
-                          <p className="text-xs font-semibold text-espresso mt-0.5">₹{p.price.toLocaleString('en-IN')}</p>
+                          <p className="text-xs font-semibold text-espresso mt-0.5 flex items-center gap-1.5">
+                            <span>₹{p.price.toLocaleString('en-IN')}</span>
+                            {p.originalPrice && p.originalPrice > p.price && (
+                              <span className="line-through text-[10px] text-espresso/45 font-normal">₹{p.originalPrice.toLocaleString('en-IN')}</span>
+                            )}
+                          </p>
                         </div>
                       </div>
 
@@ -201,7 +206,12 @@ export function WishlistDrawer({ isOpen, onClose, wishlist, products, onRemoveFr
                         </div>
                         <div className="min-w-0">
                           <h4 className="font-serif text-xs font-bold text-espresso truncate max-w-[150px]">{p.name}</h4>
-                          <p className="text-xs font-bold text-espresso mt-0.5">₹{p.price.toLocaleString('en-IN')}</p>
+                          <p className="text-xs font-bold text-espresso mt-0.5 flex items-center gap-1.5">
+                            <span>₹{p.price.toLocaleString('en-IN')}</span>
+                            {p.originalPrice && p.originalPrice > p.price && (
+                              <span className="line-through text-[10px] text-espresso/45 font-normal">₹{p.originalPrice.toLocaleString('en-IN')}</span>
+                            )}
+                          </p>
                         </div>
                       </div>
 
