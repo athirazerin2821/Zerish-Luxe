@@ -236,6 +236,70 @@ export default function SellerPortal({
   const [categoriesUpdated, setCategoriesUpdated] = useState(false);
   const [catUploadingIdx, setCatUploadingIdx] = useState<number | null>(null);
 
+  // Add Category form states
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatSub, setNewCatSub] = useState('');
+  const [newCatImg, setNewCatImg] = useState('');
+  const [newCatUploading, setNewCatUploading] = useState(false);
+
+  const handleAddNewCategory = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!newCatName.trim()) {
+      alert('Please enter a Category Name');
+      return;
+    }
+    const tabId = newCatName.trim().toLowerCase().replace(/\s+/g, '-');
+    if (localCategories.some(cat => cat.tabId === tabId)) {
+      alert(`A category with this ID "${tabId}" already exists!`);
+      return;
+    }
+    
+    const newCat: CategorySetting = {
+      tabId,
+      title: newCatName.trim().toUpperCase(),
+      subtitle: newCatSub.trim() ? newCatSub.trim().toUpperCase() : null,
+      imageUrl: newCatImg.trim() || 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?q=80&w=500&auto=format&fit=crop'
+    };
+
+    setLocalCategories(prev => [...prev, newCat]);
+    setNewCatName('');
+    setNewCatSub('');
+    setNewCatImg('');
+    alert('Category added to local list! Click "Update Category Settings" below to finalize and save to the database.');
+  };
+
+  const handleDeleteCategory = (idx: number) => {
+    if (!confirm('Are you sure you want to delete this category? (Make sure no active products rely on it)')) return;
+    setLocalCategories(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleNewCategoryUpload = async (file: File) => {
+    setNewCatUploading(true);
+    try {
+      const { uploadProductImage } = await import('../services/firebaseDb');
+      const url = await Promise.race([
+        uploadProductImage(file),
+        new Promise<string>((_, reject) => 
+          setTimeout(() => reject(new Error('TIMEOUT')), 3500)
+        )
+      ]);
+      setNewCatImg(url);
+      alert('Category image uploaded successfully!');
+    } catch (error) {
+      console.warn('Upload failed. Falling back to base64 compression.', error);
+      try {
+        const base64Url = await compressImageToBase64(file);
+        setNewCatImg(base64Url);
+        alert('Category image processed and saved successfully!');
+      } catch (compressErr) {
+        console.error('Compression failed:', compressErr);
+        alert('Error processing file.');
+      }
+    } finally {
+      setNewCatUploading(false);
+    }
+  };
+
   React.useEffect(() => {
     if (categories && categories.length > 0) {
       setLocalCategories(categories);
@@ -573,183 +637,492 @@ export default function SellerPortal({
                   {/* ========================================== */}
                   {/* --- TAB A: GRAPHICAL SALES ANALYTICS --- */}
                   {/* ========================================== */}
-                  {adminTab === 'analytics' && (
-                    <div className="space-y-6">
-                      
-                      {/* Stat summary cards */}
-                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-5">
-                        <div className="bg-white border border-espresso/10 p-5 rounded-sm space-y-3 shadow-3xs hover:shadow-2xs hover:border-terracotta/30 transition-all duration-300">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[9px] uppercase tracking-widest text-taupe font-extrabold">Curation Value</span>
-                            <div className="p-1.5 bg-terracotta/5 rounded-xs">
-                              <IndianRupee className="w-3.5 h-3.5 text-terracotta" />
-                            </div>
-                          </div>
+                  {adminTab === 'analytics' && (() => {
+                    // Let's parse dates safely
+                    const parseOrderDate = (dStr: string) => {
+                      try {
+                        return dStr ? new Date(dStr) : new Date();
+                      } catch {
+                        return new Date();
+                      }
+                    };
+
+                    const now = new Date();
+                    
+                    // Monthly / Quarterly computations
+                    const thisMonthOrders = orders.filter(o => {
+                      const d = parseOrderDate(o.date);
+                      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+                    });
+                    const thisMonthSales = thisMonthOrders.reduce((acc, o) => acc + o.total, 0);
+                    const thisMonthOrdersCount = thisMonthOrders.length;
+
+                    const currentQuarter = Math.floor(now.getMonth() / 3);
+                    const quarterlyOrders = orders.filter(o => {
+                      const d = parseOrderDate(o.date);
+                      const q = Math.floor(d.getMonth() / 3);
+                      return q === currentQuarter && d.getFullYear() === now.getFullYear();
+                    });
+                    const quarterlySales = quarterlyOrders.reduce((acc, o) => acc + o.total, 0);
+                    const quarterlyOrdersCount = quarterlyOrders.length;
+
+                    // Sales Growth (Daily/Weekly/Monthly)
+                    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    const yesterdayStart = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000);
+                    
+                    const todayOrders = orders.filter(o => parseOrderDate(o.date) >= todayStart);
+                    const yesterdayOrders = orders.filter(o => {
+                      const d = parseOrderDate(o.date);
+                      return d >= yesterdayStart && d < todayStart;
+                    });
+                    const todaySales = todayOrders.reduce((acc, o) => acc + o.total, 0);
+                    const yesterdaySales = yesterdayOrders.reduce((acc, o) => acc + o.total, 0);
+                    const dailyGrowth = yesterdaySales > 0 ? ((todaySales - yesterdaySales) / yesterdaySales) * 100 : 0;
+
+                    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                    const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+                    
+                    const thisWeekSales = orders.filter(o => parseOrderDate(o.date) >= oneWeekAgo).reduce((acc, o) => acc + o.total, 0);
+                    const lastWeekSales = orders.filter(o => {
+                      const d = parseOrderDate(o.date);
+                      return d >= twoWeeksAgo && d < oneWeekAgo;
+                    }).reduce((acc, o) => acc + o.total, 0);
+                    const weeklyGrowth = lastWeekSales > 0 ? ((thisWeekSales - lastWeekSales) / lastWeekSales) * 100 : 0;
+
+                    const lastMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+                    const lastMonthYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+                    const lastMonthOrders = orders.filter(o => {
+                      const d = parseOrderDate(o.date);
+                      return d.getMonth() === lastMonth && d.getFullYear() === lastMonthYear;
+                    });
+                    const lastMonthSales = lastMonthOrders.reduce((acc, o) => acc + o.total, 0);
+                    const monthlyGrowth = lastMonthSales > 0 ? ((thisMonthSales - lastMonthSales) / lastMonthSales) * 100 : 0;
+
+                    // Core summaries
+                    const totalSalesVal = orders.reduce((acc, curr) => acc + curr.total, 0);
+                    const totalOrdersVal = orders.length;
+                    const outOfStockProducts = products.filter(p => (p.stock || 0) === 0);
+                    const outOfStockCount = outOfStockProducts.length;
+                    const inventoryRemaining = products.reduce((acc, p) => acc + (p.stock || 0), 0);
+                    const unitsSold = orders.reduce((acc, o) => acc + o.items.reduce((sum, item) => sum + item.quantity, 0), 0);
+                    const aovVal = totalOrdersVal > 0 ? totalSalesVal / totalOrdersVal : 0;
+
+                    // Revenue and profit
+                    const grossRevenue = orders.reduce((acc, o) => acc + o.total + (o.discount || 0), 0);
+                    const discountsGiven = orders.reduce((acc, o) => acc + (o.discount || 0), 0);
+                    const shippingChargesCollected = orders.length * 150;
+                    const cogsVal = totalSalesVal * 0.45;
+                    const grossProfit = totalSalesVal - cogsVal;
+
+                    // Product performance
+                    const productSalesMap: Record<string, { product: Product; unitsSold: number; revenue: number }> = {};
+                    products.forEach(p => {
+                      productSalesMap[p.id] = { product: p, unitsSold: 0, revenue: 0 };
+                    });
+                    orders.forEach(o => {
+                      o.items.forEach(item => {
+                        const pId = item.product.id;
+                        if (productSalesMap[pId]) {
+                          productSalesMap[pId].unitsSold += item.quantity;
+                          productSalesMap[pId].revenue += item.product.price * item.quantity;
+                        } else {
+                          productSalesMap[pId] = {
+                            product: item.product,
+                            unitsSold: item.quantity,
+                            revenue: item.product.price * item.quantity
+                          };
+                        }
+                      });
+                    });
+
+                    const productSalesList = Object.values(productSalesMap);
+                    const bestSellers = [...productSalesList].filter(x => x.unitsSold > 0).sort((a, b) => b.unitsSold - a.unitsSold).slice(0, 5);
+                    const lowSellers = [...productSalesList].filter(x => x.unitsSold > 0).sort((a, b) => a.unitsSold - b.unitsSold).slice(0, 5);
+
+                    // Categories breakdown
+                    const categorySalesMap: Record<string, { categoryTitle: string; unitsSold: number; revenue: number }> = {};
+                    localCategories.forEach(cat => {
+                      categorySalesMap[cat.tabId] = { categoryTitle: cat.title, unitsSold: 0, revenue: 0 };
+                    });
+                    // Fallbacks
+                    ['chains', 'necklaces', 'bracelets', 'cuff-bracelets', 'drop-earrings', 'stud-earrings', 'hair-accessories', 'rings'].forEach(catId => {
+                      if (!categorySalesMap[catId]) {
+                        categorySalesMap[catId] = { categoryTitle: catId.toUpperCase().replace('-', ' '), unitsSold: 0, revenue: 0 };
+                      }
+                    });
+
+                    orders.forEach(o => {
+                      o.items.forEach(item => {
+                        const catId = item.product.category || 'chains';
+                        if (!categorySalesMap[catId]) {
+                          categorySalesMap[catId] = { categoryTitle: catId.toUpperCase().replace('-', ' '), unitsSold: 0, revenue: 0 };
+                        }
+                        categorySalesMap[catId].unitsSold += item.quantity;
+                        categorySalesMap[catId].revenue += item.product.price * item.quantity;
+                      });
+                    });
+
+                    const topCategories = Object.values(categorySalesMap).sort((a, b) => b.revenue - a.revenue);
+
+                    return (
+                      <div className="space-y-8 animate-fadeIn">
+                        {/* HEADER BANNER FOR ANALYTICS */}
+                        <div className="bg-espresso text-linen p-6 rounded-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm border border-espresso/10">
                           <div>
-                            <p className="text-2xl font-serif font-bold text-espresso tracking-tight">₹{(totalSalesVal + 41250).toLocaleString('en-IN')}</p>
-                            <p className="text-[8px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
-                              <span>↑ 18.2%</span>
-                              <span className="text-taupe font-normal">vs last month</span>
-                            </p>
+                            <h3 className="font-serif text-lg font-bold uppercase tracking-wider text-terracotta">Aesthetic Sales Analytics</h3>
+                            <p className="text-xs text-taupe/80 mt-1">Live synchronized financial metrics, product lifecycle tracking, and boutique performance indicators.</p>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                            <span className="text-[10px] uppercase tracking-widest font-extrabold text-emerald-400">Database Stream Connected</span>
                           </div>
                         </div>
 
-                        <div className="bg-white border border-espresso/10 p-5 rounded-sm space-y-3 shadow-3xs hover:shadow-2xs hover:border-terracotta/30 transition-all duration-300">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[9px] uppercase tracking-widest text-taupe font-extrabold">Enquiries Volume</span>
-                            <div className="p-1.5 bg-terracotta/5 rounded-xs">
-                              <Package className="w-3.5 h-3.5 text-terracotta" />
+                        {/* SECTION 1: SALES OVERVIEW */}
+                        <div className="space-y-4">
+                          <h4 className="font-serif text-sm font-extrabold uppercase tracking-wider text-espresso border-b border-espresso/15 pb-2 flex items-center gap-2">
+                            <TrendingUp className="w-4 h-4 text-terracotta" />
+                            <span>Sales Overview</span>
+                          </h4>
+
+                          {/* Stat Grid */}
+                          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                            <div className="bg-white border border-espresso/10 p-4 rounded-xs space-y-2">
+                              <span className="text-[9px] uppercase tracking-wider font-extrabold text-taupe block">Total Revenue</span>
+                              <div className="flex items-baseline justify-between">
+                                <span className="text-xl font-serif font-bold text-espresso">₹{totalSalesVal.toLocaleString('en-IN')}</span>
+                                <span className={`text-[9px] font-bold ${monthlyGrowth >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                  {monthlyGrowth >= 0 ? '↑' : '↓'} {Math.abs(monthlyGrowth).toFixed(1)}% MoM
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="bg-white border border-espresso/10 p-4 rounded-xs space-y-2">
+                              <span className="text-[9px] uppercase tracking-wider font-extrabold text-taupe block">Total Orders</span>
+                              <div className="flex items-baseline justify-between">
+                                <span className="text-xl font-serif font-bold text-espresso">{totalOrdersVal}</span>
+                                <span className="text-[9px] text-taupe font-bold uppercase">Enquiries</span>
+                              </div>
+                            </div>
+
+                            <div className="bg-white border border-espresso/10 p-4 rounded-xs space-y-2">
+                              <span className="text-[9px] uppercase tracking-wider font-extrabold text-taupe block">Average Order Value (AOV)</span>
+                              <div className="flex items-baseline justify-between">
+                                <span className="text-xl font-serif font-bold text-espresso">₹{Math.round(aovVal).toLocaleString('en-IN')}</span>
+                                <span className="text-[9px] text-taupe font-bold uppercase">Per Cart</span>
+                              </div>
+                            </div>
+
+                            <div className="bg-white border border-espresso/10 p-4 rounded-xs space-y-2">
+                              <span className="text-[9px] uppercase tracking-wider font-extrabold text-taupe block">Units Sold</span>
+                              <div className="flex items-baseline justify-between">
+                                <span className="text-xl font-serif font-bold text-espresso">{unitsSold}</span>
+                                <span className="text-[9px] text-taupe font-bold uppercase">Items Shipped</span>
+                              </div>
                             </div>
                           </div>
-                          <div>
-                            <p className="text-2xl font-serif font-bold text-espresso tracking-tight">{totalOrdersVal + 28}</p>
-                            <p className="text-[8px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
-                              <span>100%</span>
-                              <span className="text-taupe font-normal">response rating</span>
-                            </p>
+
+                          {/* Time period breakdowns and growth */}
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="bg-linen/20 border border-espresso/10 p-4 rounded-xs space-y-3">
+                              <h5 className="text-[10px] uppercase tracking-wider font-extrabold text-espresso">This Calendar Month</h5>
+                              <div className="grid grid-cols-2 gap-2 text-center bg-white p-2.5 border border-espresso/5 rounded-xs">
+                                <div>
+                                  <span className="text-[8px] uppercase tracking-widest text-taupe font-bold block">Enquiries</span>
+                                  <span className="text-sm font-serif font-bold text-espresso">{thisMonthOrdersCount}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[8px] uppercase tracking-widest text-taupe font-bold block">Revenue</span>
+                                  <span className="text-sm font-serif font-bold text-espresso">₹{thisMonthSales.toLocaleString('en-IN')}</span>
+                                </div>
+                              </div>
+                              <div className="flex justify-between items-center text-[9px]">
+                                <span className="text-taupe font-semibold">Monthly Growth Trend:</span>
+                                <span className={`font-bold ${monthlyGrowth >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                  {monthlyGrowth >= 0 ? '↑' : '↓'} {monthlyGrowth.toFixed(1)}% vs Last Month
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="bg-linen/20 border border-espresso/10 p-4 rounded-xs space-y-3">
+                              <h5 className="text-[10px] uppercase tracking-wider font-extrabold text-espresso">This Fiscal Quarter</h5>
+                              <div className="grid grid-cols-2 gap-2 text-center bg-white p-2.5 border border-espresso/5 rounded-xs">
+                                <div>
+                                  <span className="text-[8px] uppercase tracking-widest text-taupe font-bold block">Enquiries</span>
+                                  <span className="text-sm font-serif font-bold text-espresso">{quarterlyOrdersCount}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[8px] uppercase tracking-widest text-taupe font-bold block">Revenue</span>
+                                  <span className="text-sm font-serif font-bold text-espresso">₹{quarterlySales.toLocaleString('en-IN')}</span>
+                                </div>
+                              </div>
+                              <div className="flex justify-between items-center text-[9px]">
+                                <span className="text-taupe font-semibold">Quarter Status:</span>
+                                <span className="text-espresso font-bold uppercase tracking-wider">Q{(currentQuarter + 1)} Active</span>
+                              </div>
+                            </div>
+
+                            <div className="bg-linen/20 border border-espresso/10 p-4 rounded-xs space-y-3">
+                              <h5 className="text-[10px] uppercase tracking-wider font-extrabold text-espresso">Dynamic Growth Velocity</h5>
+                              <div className="space-y-1 text-[10px]">
+                                <div className="flex justify-between items-center py-0.5 border-b border-espresso/5">
+                                  <span className="text-taupe">Daily (Today vs Yesterday)</span>
+                                  <span className={`font-bold ${dailyGrowth >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                    {dailyGrowth >= 0 ? '↑' : '↓'} {dailyGrowth.toFixed(1)}%
+                                  </span>
+                                </div>
+                                <div className="flex justify-between items-center py-0.5 border-b border-espresso/5">
+                                  <span className="text-taupe">Weekly (7-day Rolling)</span>
+                                  <span className={`font-bold ${weeklyGrowth >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                    {weeklyGrowth >= 0 ? '↑' : '↓'} {weeklyGrowth.toFixed(1)}%
+                                  </span>
+                                </div>
+                                <div className="flex justify-between items-center py-0.5">
+                                  <span className="text-taupe">Monthly (30-day Rolling)</span>
+                                  <span className={`font-bold ${monthlyGrowth >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                    {monthlyGrowth >= 0 ? '↑' : '↓'} {monthlyGrowth.toFixed(1)}%
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         </div>
 
-                        <div className="bg-white border border-espresso/10 p-5 rounded-sm space-y-3 shadow-3xs hover:shadow-2xs hover:border-terracotta/30 transition-all duration-300">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[9px] uppercase tracking-widest text-taupe font-extrabold">Active Listings</span>
-                            <div className="p-1.5 bg-terracotta/5 rounded-xs">
-                              <Sparkles className="w-3.5 h-3.5 text-terracotta" />
+                        {/* SECTION 2: REVENUE & PROFIT ANALYSIS */}
+                        <div className="space-y-4">
+                          <h4 className="font-serif text-sm font-extrabold uppercase tracking-wider text-espresso border-b border-espresso/15 pb-2 flex items-center gap-2">
+                            <IndianRupee className="w-4 h-4 text-terracotta" />
+                            <span>Revenue & Profit Ledger</span>
+                          </h4>
+
+                          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                            {/* Gross Revenue Card */}
+                            <div className="bg-[#FAF8F6] border border-espresso/10 p-4 rounded-xs space-y-1 text-center">
+                              <span className="text-[8px] uppercase tracking-wider font-extrabold text-taupe block">Gross Sales Value</span>
+                              <p className="text-base font-serif font-bold text-espresso">₹{grossRevenue.toLocaleString('en-IN')}</p>
+                              <p className="text-[7px] text-taupe">Includes dynamic coupons given</p>
                             </div>
-                          </div>
-                          <div>
-                            <p className="text-2xl font-serif font-bold text-espresso tracking-tight">{products.length}</p>
-                            <p className="text-[8px] text-taupe mt-1">100% fine collections</p>
+
+                            {/* Discounts Given Card */}
+                            <div className="bg-[#FAF8F6] border border-espresso/10 p-4 rounded-xs space-y-1 text-center">
+                              <span className="text-[8px] uppercase tracking-wider font-extrabold text-taupe block">Discounts Given</span>
+                              <p className="text-base font-serif font-bold text-rose-600">-₹{discountsGiven.toLocaleString('en-IN')}</p>
+                              <p className="text-[7px] text-taupe">Applied coupon deductions</p>
+                            </div>
+
+                            {/* Shipping Collected Card */}
+                            <div className="bg-[#FAF8F6] border border-espresso/10 p-4 rounded-xs space-y-1 text-center">
+                              <span className="text-[8px] uppercase tracking-wider font-extrabold text-taupe block">Shipping Collected</span>
+                              <p className="text-base font-serif font-bold text-emerald-600">+₹{shippingChargesCollected.toLocaleString('en-IN')}</p>
+                              <p className="text-[7px] text-taupe">₹150 flat premium rate</p>
+                            </div>
+
+                            {/* COGS Card */}
+                            <div className="bg-[#FAF8F6] border border-espresso/10 p-4 rounded-xs space-y-1 text-center">
+                              <span className="text-[8px] uppercase tracking-wider font-extrabold text-taupe block">Cost of Goods Sold (COGS)</span>
+                              <p className="text-base font-serif font-bold text-amber-800">₹{Math.round(cogsVal).toLocaleString('en-IN')}</p>
+                              <p className="text-[7px] text-taupe">Craftsmanship & fine metals (45%)</p>
+                            </div>
+
+                            {/* Gross Profit Card */}
+                            <div className="bg-espresso text-linen p-4 rounded-xs space-y-1 text-center border border-espresso/20 shadow-xs">
+                              <span className="text-[8px] uppercase tracking-wider font-extrabold text-terracotta block">Net Gross Profit</span>
+                              <p className="text-lg font-serif font-bold text-white">₹{Math.round(grossProfit).toLocaleString('en-IN')}</p>
+                              <p className="text-[8px] text-emerald-400 font-semibold">Margin: 55.0%</p>
+                            </div>
                           </div>
                         </div>
 
-                        <div className="bg-white border border-espresso/10 p-5 rounded-sm space-y-3 shadow-3xs hover:shadow-2xs hover:border-terracotta/30 transition-all duration-300">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[9px] uppercase tracking-widest text-taupe font-extrabold">Out of Stock</span>
-                            <div className="p-1.5 bg-rose-50 rounded-xs">
-                              <Sliders className="w-3.5 h-3.5 text-rose-600" />
+                        {/* SECTION 3: PRODUCT PERFORMANCE & INVENTORY */}
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                          
+                          {/* Left Panel: Best & Low Sellers (7 Columns) */}
+                          <div className="lg:col-span-7 space-y-6">
+                            <div className="space-y-4">
+                              <h4 className="font-serif text-sm font-extrabold uppercase tracking-wider text-espresso border-b border-espresso/15 pb-2 flex items-center gap-2">
+                                <Sparkles className="w-4 h-4 text-terracotta" />
+                                <span>🛍️ Product Performance Rankings</span>
+                              </h4>
+
+                              {/* Best Sellers */}
+                              <div className="space-y-2">
+                                <h5 className="text-[10px] uppercase tracking-wider font-extrabold text-emerald-700 flex items-center gap-1">
+                                  <span>✦ Best-Selling Products</span>
+                                  <span className="text-[8px] text-taupe font-normal lowercase">(highest units sold)</span>
+                                </h5>
+                                {bestSellers.length === 0 ? (
+                                  <p className="text-[11px] text-taupe italic p-4 bg-linen/10 border border-espresso/5 rounded-xs text-center">
+                                    No sales data accumulated yet.
+                                  </p>
+                                ) : (
+                                  <div className="space-y-1.5">
+                                    {bestSellers.map(({ product, unitsSold: qty, revenue: rev }) => (
+                                      <div key={product.id} className="p-2.5 bg-white border border-espresso/10 rounded-xs flex items-center justify-between text-xs gap-3">
+                                        <div className="flex items-center space-x-2.5 min-w-0">
+                                          <img src={product.imageUrl} className="w-8 h-8 object-cover rounded-xs border border-espresso/10 shrink-0" referrerPolicy="no-referrer" />
+                                          <div className="min-w-0">
+                                            <p className="font-bold text-espresso truncate">{product.name}</p>
+                                            <p className="text-[8px] text-taupe uppercase tracking-widest">{product.category.replace('-', ' ')}</p>
+                                          </div>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                          <p className="font-extrabold text-espresso">{qty} sold</p>
+                                          <p className="text-[9px] font-mono text-emerald-600">₹{rev.toLocaleString('en-IN')}</p>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Low Sellers */}
+                              <div className="space-y-2">
+                                <h5 className="text-[10px] uppercase tracking-wider font-extrabold text-rose-700 flex items-center gap-1">
+                                  <span>✦ Low-Selling Products</span>
+                                  <span className="text-[8px] text-taupe font-normal lowercase">(active but low volumes)</span>
+                                </h5>
+                                {lowSellers.length === 0 ? (
+                                  <p className="text-[11px] text-taupe italic p-4 bg-linen/10 border border-espresso/5 rounded-xs text-center">
+                                    No low volume alerts yet.
+                                  </p>
+                                ) : (
+                                  <div className="space-y-1.5">
+                                    {lowSellers.map(({ product, unitsSold: qty, revenue: rev }) => (
+                                      <div key={product.id} className="p-2.5 bg-white border border-espresso/10 rounded-xs flex items-center justify-between text-xs gap-3">
+                                        <div className="flex items-center space-x-2.5 min-w-0">
+                                          <img src={product.imageUrl} className="w-8 h-8 object-cover rounded-xs border border-espresso/10 shrink-0" referrerPolicy="no-referrer" />
+                                          <div className="min-w-0">
+                                            <p className="font-bold text-espresso truncate">{product.name}</p>
+                                            <p className="text-[8px] text-taupe uppercase tracking-widest">{product.category.replace('-', ' ')}</p>
+                                          </div>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                          <p className="font-extrabold text-rose-700">{qty} sold</p>
+                                          <p className="text-[9px] font-mono text-taupe">₹{rev.toLocaleString('en-IN')}</p>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
-                          <div>
-                            <p className={`text-2xl font-serif font-bold tracking-tight ${outOfStockCount > 0 ? 'text-rose-600' : 'text-espresso'}`}>{outOfStockCount}</p>
-                            <p className="text-[8px] text-taupe mt-1">Requires restock priority</p>
+
+                          {/* Right Panel: Top Categories & Inventory Status (5 Columns) */}
+                          <div className="lg:col-span-5 space-y-6">
+                            {/* Categories breakdown */}
+                            <div className="space-y-4">
+                              <h4 className="font-serif text-sm font-extrabold uppercase tracking-wider text-espresso border-b border-espresso/15 pb-2">
+                                Category Revenues
+                              </h4>
+                              <div className="bg-white border border-espresso/10 p-4 rounded-xs space-y-3 shadow-3xs">
+                                {topCategories.map(cat => {
+                                  const pct = totalSalesVal > 0 ? (cat.revenue / totalSalesVal) * 100 : 0;
+                                  return (
+                                    <div key={cat.categoryTitle} className="space-y-1 text-xs">
+                                      <div className="flex justify-between items-center text-[10px] font-bold text-espresso">
+                                        <span className="uppercase tracking-wider">{cat.categoryTitle}</span>
+                                        <span className="font-mono text-terracotta">₹{cat.revenue.toLocaleString('en-IN')} ({pct.toFixed(1)}%)</span>
+                                      </div>
+                                      <div className="w-full bg-[#FAF8F6] border border-espresso/5 h-2 rounded-full overflow-hidden">
+                                        <div className="bg-terracotta h-full rounded-full transition-all duration-500" style={{ width: `${Math.max(pct, 2)}%` }} />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Inventory status card */}
+                            <div className="space-y-4">
+                              <h4 className="font-serif text-sm font-extrabold uppercase tracking-wider text-espresso border-b border-espresso/15 pb-2">
+                                Inventory Remaining
+                              </h4>
+                              <div className="bg-[#FAF8F6] border border-espresso/10 p-4 rounded-xs space-y-3.5">
+                                <div className="flex justify-between items-center">
+                                  <div>
+                                    <span className="text-[10px] uppercase text-taupe font-bold block">Active Catalog Size</span>
+                                    <span className="text-lg font-serif font-extrabold text-espresso">{products.length} Designs</span>
+                                  </div>
+                                  <div className="text-right">
+                                    <span className="text-[10px] uppercase text-taupe font-bold block">Total Stock Remaining</span>
+                                    <span className="text-lg font-serif font-extrabold text-espresso">{inventoryRemaining} Pcs</span>
+                                  </div>
+                                </div>
+
+                                <div className="border-t border-espresso/5 pt-2.5">
+                                  <span className="text-[10px] uppercase tracking-wider font-extrabold text-rose-700 block mb-1.5 flex items-center gap-1">
+                                    <span>⚠️ Out of Stock ({outOfStockCount})</span>
+                                  </span>
+                                  {outOfStockProducts.length === 0 ? (
+                                    <p className="text-[10px] text-emerald-700 font-bold bg-emerald-50 p-2 border border-emerald-100 rounded-xs">
+                                      ✓ Perfect! All masterpieces are currently stocked.
+                                    </p>
+                                  ) : (
+                                    <div className="space-y-1 max-h-[140px] overflow-y-auto no-scrollbar">
+                                      {outOfStockProducts.map(p => (
+                                        <div key={p.id} className="text-[10px] bg-rose-50 text-rose-800 p-1.5 border border-rose-100 rounded-xs flex justify-between items-center">
+                                          <span className="font-bold truncate max-w-[150px]">{p.name}</span>
+                                          <span className="text-[8px] bg-rose-100 text-rose-900 px-1.5 uppercase font-extrabold rounded-xs shrink-0">Needs Restock</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* SECTION 4: PRODUCT-WISE REVENUE INDEX */}
+                        <div className="space-y-4">
+                          <h4 className="font-serif text-sm font-extrabold uppercase tracking-wider text-espresso border-b border-espresso/15 pb-2">
+                            Product-Wise Financial Ledger
+                          </h4>
+                          <div className="bg-white border border-espresso/10 rounded-xs overflow-hidden shadow-3xs">
+                            <div className="overflow-x-auto no-scrollbar">
+                              <table className="w-full text-left text-xs border-collapse">
+                                <thead className="bg-[#FAF8F6] text-[9px] uppercase tracking-widest font-extrabold text-taupe border-b border-espresso/10">
+                                  <tr>
+                                    <th className="p-3">Product Name</th>
+                                    <th className="p-3">Category</th>
+                                    <th className="p-3 text-right">Price</th>
+                                    <th className="p-3 text-center">Remaining Stock</th>
+                                    <th className="p-3 text-center">Units Sold</th>
+                                    <th className="p-3 text-right">Accumulated Revenue</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-espresso/5 text-espresso">
+                                  {productSalesList.map(({ product, unitsSold: qty, revenue: rev }) => (
+                                    <tr key={product.id} className="hover:bg-linen/10 transition-colors">
+                                      <td className="p-3 font-serif font-bold text-xs truncate max-w-[180px]" title={product.name}>
+                                        {product.name}
+                                      </td>
+                                      <td className="p-3 text-[10px] uppercase tracking-wider text-taupe">
+                                        {product.category.replace('-', ' ')}
+                                      </td>
+                                      <td className="p-3 text-right font-mono">
+                                        ₹{product.price.toLocaleString('en-IN')}
+                                      </td>
+                                      <td className={`p-3 text-center font-bold font-mono ${product.stock === 0 ? 'text-rose-600' : ''}`}>
+                                        {product.stock || 0} pcs
+                                      </td>
+                                      <td className="p-3 text-center font-mono font-bold">
+                                        {qty} pcs
+                                      </td>
+                                      <td className="p-3 text-right font-bold font-mono text-emerald-600">
+                                        ₹{rev.toLocaleString('en-IN')}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
                           </div>
                         </div>
                       </div>
-
-                      {/* CUSTOM GRAPHICAL SVG GRAPH CHART */}
-                      <div className="bg-white border border-espresso/15 p-6 rounded-sm space-y-5 shadow-xs">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h4 className="font-serif text-sm font-bold text-espresso flex items-center space-x-2">
-                              <TrendingUp className="w-4 h-4 text-terracotta" />
-                              <span className="tracking-wide">Enquiry & Curation Value (Weekly)</span>
-                            </h4>
-                            <p className="text-[10px] text-taupe mt-0.5">Bespoke interactive vector-mapped aesthetic analytics</p>
-                          </div>
-                          <span className="text-[8px] bg-terracotta/10 px-2.5 py-1 uppercase tracking-widest text-terracotta font-extrabold rounded-xs border border-terracotta/10">
-                            Live Sync Active
-                          </span>
-                        </div>
-
-                        {/* Handcrafted vector chart SVG */}
-                        <div className="relative h-56 w-full border border-espresso/5 bg-[#FAF8F6] rounded-xs pt-6 pr-6 pl-10 pb-10">
-                          {/* Y-Axis scale marks */}
-                          <div className="absolute left-3 top-6 text-[8px] font-mono text-taupe/80">60k</div>
-                          <div className="absolute left-3 top-[70px] text-[8px] font-mono text-taupe/80">40k</div>
-                          <div className="absolute left-3 top-[134px] text-[8px] font-mono text-taupe/80">20k</div>
-                          <div className="absolute left-3 top-[198px] text-[8px] font-mono text-taupe/80">0k</div>
-
-                          {/* Horizontal grid guide lines */}
-                          <div className="absolute inset-x-10 top-[26px] border-b border-espresso/5 border-dashed" />
-                          <div className="absolute inset-x-10 top-[90px] border-b border-espresso/5 border-dashed" />
-                          <div className="absolute inset-x-10 top-[154px] border-b border-espresso/5 border-dashed" />
-                          <div className="absolute inset-x-10 top-[218px] border-b border-espresso/10" />
-
-                          {/* Line and Bar Plot */}
-                          <svg className="w-full h-full overflow-visible" preserveAspectRatio="none">
-                            <defs>
-                              <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="#c3765b" stopOpacity="0.35" />
-                                <stop offset="100%" stopColor="#c3765b" stopOpacity="0.0" />
-                              </linearGradient>
-                            </defs>
-                            
-                            {/* Area Area */}
-                            <path 
-                              d={`
-                                M 0,${218 - (chartData[0] / maxChartVal) * 192}
-                                L 60,${218 - (chartData[1] / maxChartVal) * 192}
-                                L 120,${218 - (chartData[2] / maxChartVal) * 192}
-                                L 180,${218 - (chartData[3] / maxChartVal) * 192}
-                                L 240,${218 - (chartData[4] / maxChartVal) * 192}
-                                L 300,${218 - (chartData[5] / maxChartVal) * 192}
-                                L 300,218 L 0,218 Z
-                              `}
-                              fill="url(#chartGrad)"
-                              className="transition-all duration-1000"
-                            />
-
-                            {/* Main Stroke Line */}
-                            <path 
-                              d={`
-                                M 0,${218 - (chartData[0] / maxChartVal) * 192}
-                                L 60,${218 - (chartData[1] / maxChartVal) * 192}
-                                L 120,${218 - (chartData[2] / maxChartVal) * 192}
-                                L 180,${218 - (chartData[3] / maxChartVal) * 192}
-                                L 240,${218 - (chartData[4] / maxChartVal) * 192}
-                                L 300,${218 - (chartData[5] / maxChartVal) * 192}
-                              `}
-                              fill="none"
-                              stroke="#c3765b"
-                              strokeWidth="3.5"
-                              strokeLinecap="round"
-                              className="transition-all duration-1000"
-                            />
-
-                            {/* Data Point nodes dots */}
-                            {chartData.map((val, i) => {
-                              const cx = i * 60;
-                              const cy = 218 - (val / maxChartVal) * 192;
-                              return (
-                                <g key={i} className="group cursor-pointer">
-                                  <circle 
-                                    cx={cx} 
-                                    cy={cy} 
-                                    r="5.5" 
-                                    fill="#4d3a33" 
-                                    stroke="#e6dad2" 
-                                    strokeWidth="2" 
-                                  />
-                                  <circle 
-                                    cx={cx} 
-                                    cy={cy} 
-                                    r="9" 
-                                    fill="#c3765b" 
-                                    opacity="0" 
-                                    className="hover:opacity-30 transition-opacity" 
-                                  />
-                                </g>
-                              );
-                            })}
-                          </svg>
-
-                          {/* X-Axis Labels */}
-                          <div className="absolute left-[38px] bottom-2.5 text-[8px] font-mono text-taupe font-bold">Week 1</div>
-                          <div className="absolute left-[98px] bottom-2.5 text-[8px] font-mono text-taupe font-bold">Week 2</div>
-                          <div className="absolute left-[158px] bottom-2.5 text-[8px] font-mono text-taupe font-bold">Week 3</div>
-                          <div className="absolute left-[218px] bottom-2.5 text-[8px] font-mono text-taupe font-bold">Week 4</div>
-                          <div className="absolute left-[278px] bottom-2.5 text-[8px] font-mono text-taupe font-bold">Week 5</div>
-                          <div className="absolute left-[338px] bottom-2.5 text-[8px] font-mono text-taupe font-bold">Week 6</div>
-                        </div>
-
-                        <p className="text-[10px] text-taupe/80 italic text-center leading-relaxed">
-                          Hover points to track curation metrics. Instantly updates when test enquiries are placed in active session!
-                        </p>
-                      </div>
-
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {/* ========================================== */}
                   {/* --- TAB B: PRODUCTS CATALOG MANAGER --- */}
@@ -786,13 +1159,9 @@ export default function SellerPortal({
                                 onChange={(e) => setNewProdCategory(e.target.value as Product['category'])}
                                 className="w-full border border-espresso/20 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
                               >
-                                <option value="chains">Chains</option>
-                                <option value="necklaces">Necklaces</option>
-                                <option value="bracelets">Bracelets</option>
-                                <option value="cuff-bracelets">Cuff Bangles</option>
-                                <option value="drop-earrings">Drop Earrings</option>
-                                <option value="stud-earrings">Stud Earrings</option>
-                                <option value="hair-accessories">Hair Accessories</option>
+                                {localCategories.map(cat => (
+                                  <option key={cat.tabId} value={cat.tabId}>{cat.title}</option>
+                                ))}
                               </select>
                             </div>
 
@@ -1106,14 +1475,9 @@ export default function SellerPortal({
                                           onChange={(e) => setEditCategory(e.target.value as Product['category'])}
                                           className="w-full border border-espresso/20 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
                                         >
-                                          <option value="chains">Chains</option>
-                                          <option value="necklaces">Necklaces</option>
-                                          <option value="bracelets">Bracelets</option>
-                                          <option value="cuff-bracelets">Cuff Bangles</option>
-                                          <option value="drop-earrings">Drop Earrings</option>
-                                          <option value="stud-earrings">Stud Earrings</option>
-                                          <option value="hair-accessories">Hair Accessories</option>
-                                          <option value="rings">Rings</option>
+                                          {localCategories.map(cat => (
+                                            <option key={cat.tabId} value={cat.tabId}>{cat.title}</option>
+                                          ))}
                                         </select>
                                       </div>
                                     </div>
@@ -1658,10 +2022,10 @@ export default function SellerPortal({
                           <span className="text-[9px] uppercase tracking-wider text-taupe font-bold">Edit names, subtitles, and images of categories</span>
                         </div>
 
-                        <form onSubmit={handleSaveCategories} className="space-y-5">
+                        <form onSubmit={handleSaveCategories} className="space-y-6">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {localCategories.map((cat, idx) => (
-                              <div key={cat.tabId} className="p-3 bg-[#FAF8F6] border border-espresso/10 rounded-xs flex gap-4 items-center">
+                              <div key={cat.tabId} className="p-3 bg-[#FAF8F6] border border-espresso/10 rounded-xs flex gap-4 items-center relative group">
                                 {/* Thumbnail Preview */}
                                 <div className="w-20 h-20 shrink-0 aspect-square bg-[#FAF8F6] border border-espresso/10 rounded-xs overflow-hidden relative">
                                   <img src={cat.imageUrl} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
@@ -1673,7 +2037,17 @@ export default function SellerPortal({
                                 </div>
 
                                 {/* Controls */}
-                                <div className="flex-1 space-y-2">
+                                <div className="flex-1 space-y-2 relative pr-6">
+                                  {/* Delete Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteCategory(idx)}
+                                    className="absolute top-0 right-0 p-1 text-taupe hover:text-terracotta rounded-xs transition-colors cursor-pointer"
+                                    title="Delete Category"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+
                                   <div className="grid grid-cols-2 gap-2">
                                     <div>
                                       <label className="block text-[8px] uppercase tracking-wider font-semibold text-espresso mb-0.5">
@@ -1738,6 +2112,82 @@ export default function SellerPortal({
                                 </div>
                               </div>
                             ))}
+                          </div>
+
+                          {/* Dynamic Add New Category Form Subsection */}
+                          <div className="p-4 bg-linen/25 border border-espresso/10 rounded-xs space-y-4">
+                            <h5 className="text-[10px] uppercase tracking-widest font-extrabold text-espresso flex items-center space-x-1.5 border-b border-espresso/5 pb-1">
+                              <Plus className="w-3.5 h-3.5 text-terracotta" />
+                              <span>Add New Shop Category</span>
+                            </h5>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div>
+                                <label className="block text-[9px] uppercase tracking-wider font-extrabold text-espresso mb-1">
+                                  Category Name *
+                                </label>
+                                <input 
+                                  type="text"
+                                  placeholder="e.g. ANKLETS"
+                                  value={newCatName}
+                                  onChange={(e) => setNewCatName(e.target.value)}
+                                  className="w-full border border-espresso/15 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[9px] uppercase tracking-wider font-extrabold text-espresso mb-1">
+                                  Subtitle (Optional)
+                                </label>
+                                <input 
+                                  type="text"
+                                  placeholder="e.g. SHINE"
+                                  value={newCatSub}
+                                  onChange={(e) => setNewCatSub(e.target.value)}
+                                  className="w-full border border-espresso/15 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[9px] uppercase tracking-wider font-extrabold text-espresso mb-1">
+                                  Image URL (or upload below)
+                                </label>
+                                <input 
+                                  type="url"
+                                  placeholder="Paste image web address..."
+                                  value={newCatImg}
+                                  onChange={(e) => setNewCatImg(e.target.value)}
+                                  className="w-full border border-espresso/15 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                />
+                              </div>
+                            </div>
+                            
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
+                              <div className="flex items-center space-x-2">
+                                <input 
+                                  type="file" 
+                                  accept="image/*"
+                                  id="new-cat-upload"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) handleNewCategoryUpload(file);
+                                  }}
+                                />
+                                <label 
+                                  htmlFor="new-cat-upload"
+                                  className="px-3 py-1 bg-white hover:bg-espresso/5 border border-espresso/20 text-[9px] uppercase tracking-wider font-extrabold text-espresso cursor-pointer transition-colors"
+                                >
+                                  {newCatUploading ? 'Uploading...' : 'Upload Image File'}
+                                </label>
+                                <span className="text-[9px] text-taupe font-semibold">Max 1MB, or use the Image URL input</span>
+                              </div>
+                              
+                              <button
+                                type="button"
+                                onClick={handleAddNewCategory}
+                                className="px-4 py-2 bg-terracotta hover:bg-espresso text-white text-[9px] uppercase tracking-wider font-extrabold transition-colors cursor-pointer"
+                              >
+                                Add Category to Catalog
+                              </button>
+                            </div>
                           </div>
 
                           <div className="pt-2">
