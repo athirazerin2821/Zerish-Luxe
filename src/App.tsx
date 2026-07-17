@@ -127,15 +127,7 @@ export default function App() {
     const saved = localStorage.getItem('zl_products');
     if (!saved) return INITIAL_PRODUCTS;
     try {
-      const parsed = JSON.parse(saved) as Product[];
-      const parsedIds = new Set(parsed.map(p => p.id));
-      const missing = INITIAL_PRODUCTS.filter(p => !parsedIds.has(p.id));
-      if (missing.length > 0) {
-        const merged = [...parsed, ...missing];
-        localStorage.setItem('zl_products', JSON.stringify(merged));
-        return merged;
-      }
-      return parsed;
+      return JSON.parse(saved) as Product[];
     } catch (e) {
       return INITIAL_PRODUCTS;
     }
@@ -154,41 +146,7 @@ export default function App() {
   const [orders, setOrders] = useState<Order[]>(() => {
     const saved = localStorage.getItem('zl_orders');
     if (saved) return JSON.parse(saved);
-    // Initialize with 2 default orders to make the Seller Analytics look spectacular from day 1!
-    const defaults: Order[] = [
-      {
-        id: 'ZL-4291',
-        customerName: 'Anjali Nair',
-        phoneNumber: '9446012345',
-        city: 'Kochi',
-        state: 'Kerala',
-        postalCode: '682016',
-        items: [
-          { product: INITIAL_PRODUCTS[0], quantity: 1 } // Herringbone
-        ],
-        total: 1899,
-        discount: 0,
-        status: 'Delivered',
-        date: 'Jul 4, 2026',
-        trackingNumber: 'ZL-TRACK-4291'
-      },
-      {
-        id: 'ZL-8910',
-        customerName: 'Keerthana S',
-        phoneNumber: '9840123456',
-        city: 'Chennai',
-        state: 'Tamil Nadu',
-        postalCode: '600001',
-        items: [
-          { product: INITIAL_PRODUCTS[10], quantity: 1 } // Baroque Drops
-        ],
-        total: 2190,
-        discount: 0,
-        status: 'Dispatched',
-        date: 'Jul 5, 2026',
-        trackingNumber: 'ZL-TRACK-8910'
-      }
-    ];
+    const defaults: Order[] = [];
     localStorage.setItem('zl_orders', JSON.stringify(defaults));
     return defaults;
   });
@@ -713,7 +671,7 @@ export default function App() {
         const snapshot = await getDocs(collection(db, 'products'));
         const deletePromises = snapshot.docs.map(d => deleteDoc(doc(db, 'products', d.id)));
         await Promise.all(deletePromises);
-        await seedDatabaseIfEmpty();
+        await seedDatabaseIfEmpty(true);
         const freshProds = await getProducts();
         setProducts(freshProds);
         alert('Catalog successfully reset to defaults!');
@@ -827,14 +785,7 @@ export default function App() {
     if (activeTab === 'new-arrivals') matchTab = !!p.isNew;
     else if (activeTab === 'best-sellers') matchTab = !!p.isBestSeller;
     else if (activeTab === 'gift-collection') matchTab = !!p.isGift;
-    else if (activeTab === 'chains') matchTab = p.category === 'chains';
-    else if (activeTab === 'necklaces') matchTab = p.category === 'necklaces';
-    else if (activeTab === 'bracelets') matchTab = p.category === 'bracelets';
-    else if (activeTab === 'cuff-bracelets') matchTab = p.category === 'cuff-bracelets';
-    else if (activeTab === 'drop-earrings') matchTab = p.category === 'drop-earrings';
-    else if (activeTab === 'stud-earrings') matchTab = p.category === 'stud-earrings';
-    else if (activeTab === 'hair-accessories') matchTab = p.category === 'hair-accessories';
-    else if (activeTab === 'rings') matchTab = p.category === 'rings';
+    else matchTab = p.category === activeTab;
 
     // 2. Price slider
     const matchPrice = p.price <= priceRange;
@@ -1088,26 +1039,17 @@ export default function App() {
                 </button>
                 {/* Dropdown elements */}
                 <div className="absolute left-0 mt-1 w-52 bg-[#FAF8F6] border border-espresso/15 shadow-xl rounded-xs py-2 hidden group-hover:block z-50">
-                  {[
-                    { id: 'chains', label: 'Chains' },
-                    { id: 'necklaces', label: 'Necklaces' },
-                    { id: 'rings', label: 'Rings' },
-                    { id: 'bracelets', label: 'Bracelets' },
-                    { id: 'cuff-bracelets', label: 'Cuff Bangles' },
-                    { id: 'drop-earrings', label: 'Drop Earrings' },
-                    { id: 'stud-earrings', label: 'Stud Earrings' },
-                    { id: 'hair-accessories', label: 'Hair Accessories' }
-                  ].map(item => (
+                  {categories.map(cat => (
                     <button 
-                      key={item.id}
+                      key={cat.tabId}
                       onClick={() => {
-                        setActiveTab(item.id as any);
+                        setActiveTab(cat.tabId as any);
                         const el = document.getElementById('shop');
                         el?.scrollIntoView({ behavior: 'smooth' });
                       }}
                       className="block w-full text-left px-4 py-2.5 text-[10px] uppercase tracking-widest font-extrabold text-espresso hover:bg-linen/45 hover:text-terracotta transition-colors cursor-pointer"
                     >
-                      {item.label}
+                      {cat.title}
                     </button>
                   ))}
                 </div>
@@ -1418,14 +1360,7 @@ export default function App() {
           {[
             { id: 'best-sellers', label: 'Best Sellers' },
             { id: 'gift-collection', label: 'Gift Collection' },
-            { id: 'chains', label: 'Chains' },
-            { id: 'necklaces', label: 'Necklaces' },
-            { id: 'rings', label: 'Rings' },
-            { id: 'bracelets', label: 'Bracelets' },
-            { id: 'cuff-bracelets', label: 'Cuff Bangles' },
-            { id: 'drop-earrings', label: 'Drop Earrings' },
-            { id: 'stud-earrings', label: 'Stud Earrings' },
-            { id: 'hair-accessories', label: 'Hair Accessories' }
+            ...categories.map(cat => ({ id: cat.tabId, label: cat.title }))
           ].map(tab => (
             <button
               key={tab.id}
