@@ -59,7 +59,19 @@ export const DEFAULT_CATEGORIES: CategorySetting[] = [
 ];
 
 // Database Seeding Helper
-export async function seedDatabaseIfEmpty() {
+export async function seedDatabaseIfEmpty(force = false) {
+  if (!force) {
+    try {
+      const seedStatusDoc = await getDoc(doc(db, 'settings', 'seeded'));
+      if (seedStatusDoc.exists() && seedStatusDoc.data()?.seeded) {
+        console.log('Database already seeded previously. Skipping automatic seeding.');
+        return;
+      }
+    } catch (error) {
+      console.warn('Non-blocking: Could not check if database is seeded:', error);
+    }
+  }
+
   // 0. Seed Categories
   try {
     const catDoc = await getDoc(doc(db, 'settings', 'categories'));
@@ -128,56 +140,17 @@ export async function seedDatabaseIfEmpty() {
     console.warn('Non-blocking: Could not seed coupons:', error);
   }
 
-  // 5. Seed Orders (Only if authenticated, as unauthenticated users are restricted from listing orders)
-  if (auth.currentUser) {
-    try {
-      const ordersSnapshot = await getDocs(collection(db, 'orders'));
-      if (ordersSnapshot.empty) {
-        console.log('Seeding initial orders into Firestore...');
-        const defaultOrders = [
-          {
-            id: 'ZL-4291',
-            customerName: 'Anjali Nair',
-            phoneNumber: '9446012345',
-            city: 'Kochi',
-            state: 'Kerala',
-            postalCode: '682016',
-            items: [
-              { product: INITIAL_PRODUCTS[0], quantity: 1 }
-            ],
-            total: 1899,
-            discount: 0,
-            status: 'Delivered',
-            date: 'Jul 4, 2026',
-            trackingNumber: 'ZL-TRACK-4291',
-            isPaid: true
-          },
-          {
-            id: 'ZL-8910',
-            customerName: 'Keerthana S',
-            phoneNumber: '9840123456',
-            city: 'Chennai',
-            state: 'Tamil Nadu',
-            postalCode: '600001',
-            items: [
-              { product: INITIAL_PRODUCTS[10], quantity: 1 }
-            ],
-            total: 2190,
-            discount: 0,
-            status: 'Dispatched',
-            date: 'Jul 5, 2026',
-            trackingNumber: 'ZL-TRACK-8910',
-            isPaid: false
-          }
-        ];
-        for (const o of defaultOrders) {
-          await setDoc(doc(db, 'orders', o.id), o);
-        }
-      }
-    } catch (error) {
-      console.warn('Non-blocking: Could not seed orders:', error);
-    }
+  // Set the seeded flag at the end of successful seeding
+  try {
+    await setDoc(doc(db, 'settings', 'seeded'), { 
+      seeded: true, 
+      seededAt: new Date().toISOString() 
+    });
+  } catch (error) {
+    console.warn('Non-blocking: Could not set seeded settings document:', error);
   }
+
+  // 5. Seed Orders (Omitted as requested to keep dashboard free of dummy data)
 }
 
 // Products API
