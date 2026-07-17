@@ -14,7 +14,10 @@ import {
   Truck,
   Heart,
   ZoomIn,
-  ZoomOut
+  ZoomOut,
+  Maximize2,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { Product } from '../types';
 
@@ -40,6 +43,109 @@ export default function ProductModal({
     ? product.thumbnails 
     : [product.imageUrl];
   const [activeImgIdx, setActiveImgIdx] = useState(0);
+
+  // Fullscreen Lightbox state
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const [lightboxImgIdx, setLightboxImgIdx] = useState(0);
+  const [lightboxZoomScale, setLightboxZoomScale] = useState(1);
+  const [lightboxPanOffset, setLightboxPanOffset] = useState({ x: 0, y: 0 });
+  const isLightboxPanning = useRef(false);
+  const lightboxPanStart = useRef({ x: 0, y: 0 });
+
+  const handleLightboxZoomIn = () => {
+    setLightboxZoomScale(prev => Math.min(prev + 0.5, 4));
+  };
+
+  const handleLightboxZoomOut = () => {
+    setLightboxZoomScale(prev => {
+      const next = Math.max(prev - 0.5, 1);
+      if (next === 1) {
+        setLightboxPanOffset({ x: 0, y: 0 });
+      }
+      return next;
+    });
+  };
+
+  const handleLightboxZoomReset = () => {
+    setLightboxZoomScale(1);
+    setLightboxPanOffset({ x: 0, y: 0 });
+  };
+
+  const handleLightboxPanStart = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
+    if (lightboxZoomScale <= 1) return;
+    isLightboxPanning.current = true;
+    
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    
+    lightboxPanStart.current = {
+      x: clientX - lightboxPanOffset.x,
+      y: clientY - lightboxPanOffset.y
+    };
+  };
+
+  const handleLightboxPanMove = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
+    if (!isLightboxPanning.current || lightboxZoomScale <= 1) return;
+    
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    
+    const newX = clientX - lightboxPanStart.current.x;
+    const newY = clientY - lightboxPanStart.current.y;
+    
+    const maxBoundX = (lightboxZoomScale - 1) * 300;
+    const maxBoundY = (lightboxZoomScale - 1) * 300;
+    
+    setLightboxPanOffset({
+      x: Math.max(-maxBoundX, Math.min(maxBoundX, newX)),
+      y: Math.max(-maxBoundY, Math.min(maxBoundY, newY))
+    });
+  };
+
+  const handleLightboxPanEnd = () => {
+    isLightboxPanning.current = false;
+  };
+
+  const handlePrevLightboxImg = () => {
+    setLightboxImgIdx(prev => {
+      const nextIdx = prev === 0 ? imageList.length - 1 : prev - 1;
+      handleLightboxZoomReset();
+      return nextIdx;
+    });
+  };
+
+  const handleNextLightboxImg = () => {
+    setLightboxImgIdx(prev => {
+      const nextIdx = prev === imageList.length - 1 ? 0 : prev + 1;
+      handleLightboxZoomReset();
+      return nextIdx;
+    });
+  };
+
+  const handleCloseLightbox = () => {
+    setIsLightboxOpen(false);
+    handleLightboxZoomReset();
+  };
+
+  // Keyboard listeners for Lightbox Navigation
+  React.useEffect(() => {
+    if (!isLightboxOpen) return;
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleCloseLightbox();
+      } else if (e.key === 'ArrowLeft') {
+        handlePrevLightboxImg();
+      } else if (e.key === 'ArrowRight') {
+        handleNextLightboxImg();
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isLightboxOpen, lightboxImgIdx]);
 
   // Unified Zoom State
   const [zoomScale, setZoomScale] = useState(1);
@@ -146,7 +252,8 @@ export default function ProductModal({
   const inWishlist = wishlist.includes(product.id);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
       {/* Overlay mask */}
       <div 
         onClick={onClose}
@@ -171,6 +278,12 @@ export default function ProductModal({
           <div className="relative aspect-square bg-[#FAF8F6] border border-espresso/10 overflow-hidden rounded-sm select-none">
             {/* Interactive Zoom and Pan Board */}
             <div 
+              onClick={() => {
+                if (zoomScale <= 1) {
+                  setIsLightboxOpen(true);
+                  setLightboxImgIdx(activeImgIdx);
+                }
+              }}
               onMouseDown={handlePanStart}
               onMouseMove={handlePanMove}
               onMouseUp={handlePanEnd}
@@ -179,13 +292,13 @@ export default function ProductModal({
               onTouchMove={handlePanMove}
               onTouchEnd={handlePanEnd}
               onDoubleClick={() => zoomScale > 1 ? handleZoomReset() : setZoomScale(2.5)}
-              className="relative w-full h-full overflow-hidden flex items-center justify-center"
+              className="relative w-full h-full overflow-hidden flex items-center justify-center group/img"
               style={{ cursor: zoomScale > 1 ? 'grab' : 'zoom-in' }}
             >
               <img 
                 src={imageList[activeImgIdx]} 
                 alt={product.name} 
-                className="w-full h-full object-cover rounded-sm pointer-events-none"
+                className="w-full h-full object-cover rounded-sm pointer-events-none transition-transform duration-200"
                 style={{
                   transform: `scale(${zoomScale}) translate(${panOffset.x / zoomScale}px, ${panOffset.y / zoomScale}px)`,
                   transformOrigin: 'center center',
@@ -198,6 +311,16 @@ export default function ProductModal({
                 <div className="absolute inset-x-0 bottom-14 text-center pointer-events-none z-10">
                   <span className="bg-espresso/80 text-[#FAF8F6] text-[8px] uppercase tracking-widest font-extrabold px-2.5 py-1 rounded-full backdrop-blur-xs shadow-xs animate-pulse">
                     Drag or swipe to pan
+                  </span>
+                </div>
+              )}
+
+              {/* Hover prompt overlay when not zoomed */}
+              {zoomScale === 1 && (
+                <div className="absolute inset-0 bg-espresso/5 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                  <span className="bg-espresso/80 text-white text-[10px] uppercase tracking-widest font-bold px-3 py-2 rounded-xs flex items-center gap-1.5 shadow-md">
+                    <Maximize2 className="w-3.5 h-3.5" />
+                    Click to View Clearly
                   </span>
                 </div>
               )}
@@ -221,7 +344,10 @@ export default function ProductModal({
             <div className="absolute bottom-3 left-3 flex items-center space-x-1 z-10 bg-white/90 backdrop-blur-xs border border-espresso/10 p-1 rounded-sm shadow-xs">
               <button
                 type="button"
-                onClick={handleZoomOut}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleZoomOut();
+                }}
                 disabled={zoomScale <= 1}
                 className="p-1 text-espresso hover:text-terracotta disabled:opacity-30 disabled:hover:text-espresso transition-colors cursor-pointer"
                 title="Zoom Out"
@@ -233,7 +359,10 @@ export default function ProductModal({
               </span>
               <button
                 type="button"
-                onClick={handleZoomIn}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleZoomIn();
+                }}
                 disabled={zoomScale >= 4}
                 className="p-1 text-espresso hover:text-terracotta disabled:opacity-30 disabled:hover:text-espresso transition-colors cursor-pointer"
                 title="Zoom In"
@@ -243,7 +372,10 @@ export default function ProductModal({
               {zoomScale > 1 && (
                 <button
                   type="button"
-                  onClick={handleZoomReset}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleZoomReset();
+                  }}
                   className="p-1 text-[8px] uppercase tracking-wider font-extrabold text-terracotta hover:bg-espresso hover:text-white px-1.5 py-0.5 rounded-xs transition-all ml-1 cursor-pointer"
                 >
                   Reset
@@ -251,9 +383,26 @@ export default function ProductModal({
               )}
             </div>
 
+            {/* Fullscreen Button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsLightboxOpen(true);
+                setLightboxImgIdx(activeImgIdx);
+              }}
+              className="absolute bottom-3 right-3 z-10 bg-white/90 hover:bg-espresso hover:text-[#FAF8F6] text-espresso border border-espresso/10 px-2.5 py-1.5 rounded-sm shadow-xs flex items-center space-x-1.5 transition-all text-[9px] uppercase tracking-wider font-extrabold cursor-pointer"
+              title="Open Fullscreen View"
+            >
+              <Maximize2 className="w-3.5 h-3.5 animate-pulse" />
+              <span>Fullscreen</span>
+            </button>
+
             {/* Wishlist button */}
             <button 
-              onClick={() => onToggleWishlist(product.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleWishlist(product.id);
+              }}
               className="absolute top-3 right-3 p-2 bg-white/90 hover:bg-espresso hover:text-white rounded-full text-espresso shadow-xs transition-colors z-10"
               title="Add to Wishlist"
             >
@@ -439,5 +588,140 @@ export default function ProductModal({
 
       </div>
     </div>
+
+    {/* FULLSCREEN LIGHTBOX MODAL */}
+    {isLightboxOpen && (
+      <div className="fixed inset-0 z-[100] bg-espresso/95 backdrop-blur-md flex flex-col justify-between p-4 sm:p-6 select-none animate-in fade-in duration-200">
+        {/* Header Controls */}
+        <div className="flex items-center justify-between w-full text-white/90 px-2 pt-2">
+          <div>
+            <span className="font-serif text-sm font-semibold tracking-wide block">
+              {product.name}
+            </span>
+            <span className="text-[10px] text-[#FAF8F6]/60 block tracking-wider font-mono uppercase">
+              Image {lightboxImgIdx + 1} of {imageList.length}
+            </span>
+          </div>
+          
+          <div className="flex items-center space-x-4">
+            {/* Lightbox Zoom Indicator / Controls */}
+            <div className="flex items-center bg-white/10 border border-white/10 p-1 rounded-sm text-xs">
+              <button
+                type="button"
+                onClick={handleLightboxZoomOut}
+                disabled={lightboxZoomScale <= 1}
+                className="p-1 hover:text-terracotta disabled:opacity-30 transition-colors cursor-pointer"
+                title="Zoom Out"
+              >
+                <ZoomOut className="w-4 h-4" />
+              </button>
+              <span className="font-mono px-2 font-bold min-w-[36px] text-center">
+                {Math.round(lightboxZoomScale * 100)}%
+              </span>
+              <button
+                type="button"
+                onClick={handleLightboxZoomIn}
+                disabled={lightboxZoomScale >= 4}
+                className="p-1 hover:text-terracotta disabled:opacity-30 transition-colors cursor-pointer"
+                title="Zoom In"
+              >
+                <ZoomIn className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Close Button */}
+            <button 
+              onClick={handleCloseLightbox}
+              className="p-2 bg-white/10 hover:bg-terracotta hover:text-white rounded-full transition-all text-white cursor-pointer"
+              title="Close Fullscreen (Esc)"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Main Large Visual Stage */}
+        <div className="relative flex-1 flex items-center justify-center overflow-hidden my-4">
+          {/* Left Nav Button */}
+          {imageList.length > 1 && (
+            <button
+              onClick={handlePrevLightboxImg}
+              className="absolute left-2 sm:left-4 z-20 p-3 rounded-full bg-white/10 hover:bg-terracotta text-white hover:scale-105 active:scale-95 transition-all cursor-pointer backdrop-blur-xs"
+              title="Previous Image (Left Arrow)"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+          )}
+
+          {/* Middle Zoomable Image Container */}
+          <div 
+            onMouseDown={handleLightboxPanStart}
+            onMouseMove={handleLightboxPanMove}
+            onMouseUp={handleLightboxPanEnd}
+            onMouseLeave={handleLightboxPanEnd}
+            onTouchStart={handleLightboxPanStart}
+            onTouchMove={handleLightboxPanMove}
+            onTouchEnd={handleLightboxPanEnd}
+            onDoubleClick={() => lightboxZoomScale > 1 ? handleLightboxZoomReset() : setLightboxZoomScale(2.5)}
+            className="relative w-full h-full max-w-3xl max-h-[75vh] flex items-center justify-center overflow-hidden"
+            style={{ cursor: lightboxZoomScale > 1 ? 'grab' : 'zoom-in' }}
+          >
+            <img 
+              src={imageList[lightboxImgIdx]} 
+              alt={`${product.name} large view`} 
+              className="max-w-full max-h-full object-contain pointer-events-none transition-transform duration-200"
+              style={{
+                transform: `scale(${lightboxZoomScale}) translate(${lightboxPanOffset.x / lightboxZoomScale}px, ${lightboxPanOffset.y / lightboxZoomScale}px)`,
+                transformOrigin: 'center center',
+                transition: isLightboxPanning.current ? 'none' : 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
+              }}
+              referrerPolicy="no-referrer"
+            />
+          </div>
+
+          {/* Right Nav Button */}
+          {imageList.length > 1 && (
+            <button
+              onClick={handleNextLightboxImg}
+              className="absolute right-2 sm:right-4 z-20 p-3 rounded-full bg-white/10 hover:bg-terracotta text-white hover:scale-105 active:scale-95 transition-all cursor-pointer backdrop-blur-xs"
+              title="Next Image (Right Arrow)"
+            >
+              <ChevronRight className="w-6 h-6" />
+            </button>
+          )}
+        </div>
+
+        {/* Footer Thumbnails list */}
+        <div className="flex flex-col items-center space-y-3 pb-2">
+          {imageList.length > 1 && (
+            <div className="flex items-center justify-center space-x-2 overflow-x-auto max-w-full py-2 px-4 scrollbar-thin">
+              {imageList.map((url, index) => (
+                <button
+                  key={index}
+                  onClick={() => {
+                    setLightboxImgIdx(index);
+                    handleLightboxZoomReset();
+                  }}
+                  className={`w-12 h-12 border rounded-sm overflow-hidden flex-shrink-0 transition-all ${
+                    lightboxImgIdx === index
+                      ? 'border-terracotta ring-1 ring-terracotta scale-105'
+                      : 'border-white/20 hover:border-white/50 opacity-60 hover:opacity-100'
+                  }`}
+                >
+                  <img src={url} alt={`Thumb ${index + 1}`} className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
+          
+          <div className="text-[10px] text-[#FAF8F6]/40 uppercase tracking-widest font-semibold flex items-center space-x-2">
+            <span>Double-click to Zoom/Reset</span>
+            <span>•</span>
+            <span>Pinch or Drag to Pan</span>
+          </div>
+        </div>
+      </div>
+    )}
+  </>
   );
 }
