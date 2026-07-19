@@ -674,6 +674,11 @@ export default function App() {
   };
 
   const handleAddInstagramPost = async (post: InstagramPost): Promise<void> => {
+    if (!isSellerAuthenticated || !auth.currentUser) {
+      const errorMsg = 'Access Denied: You do not have seller permissions to add posts or videos to the studio wall.';
+      alert(errorMsg);
+      throw new Error(errorMsg);
+    }
     try {
       await addInstagramPost(post);
       setInstagramPosts(prev => [post, ...prev]);
@@ -684,6 +689,11 @@ export default function App() {
   };
 
   const handleDeleteInstagramPost = async (id: string): Promise<void> => {
+    if (!isSellerAuthenticated || !auth.currentUser) {
+      const errorMsg = 'Access Denied: You do not have seller permissions to delete posts or videos from the studio wall.';
+      alert(errorMsg);
+      throw new Error(errorMsg);
+    }
     try {
       await deleteInstagramPost(id);
       setInstagramPosts(prev => prev.filter(p => p.id !== id));
