@@ -13,70 +13,7 @@ export interface InstagramPost {
   jewellery: string;
 }
 
-const INSTAGRAM_POSTS: InstagramPost[] = [
-  {
-    id: 'post-1',
-    imageUrl: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?q=80&w=600&auto=format&fit=crop',
-    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-holding-a-gold-ring-close-up-41584-large.mp4',
-    handle: '@anjali.nair_kochi',
-    caption: 'Waterproof, sweatproof, and absolutely stunning. Worn my Herringbone Flat Chain through endless beach trips and it still looks liquid gold! ✨🏖️ #ZerishLuxe #AntiTarnish #zerishluxestudio',
-    likes: 420,
-    comments: 18,
-    location: 'Fort Kochi Beach',
-    jewellery: 'Herringbone Flat Chain'
-  },
-  {
-    id: 'post-2',
-    imageUrl: 'https://images.unsplash.com/photo-1573408301185-9146fe634ad0?q=80&w=600&auto=format&fit=crop',
-    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-shining-gold-wedding-rings-41583-large.mp4',
-    handle: '@keerthana_chennai_edit',
-    caption: 'My absolute favorite everyday companion. Elegant layers that transition seamlessly from office meetings to evening cafes. ☕💎 #MinimalElegance #FineJewelry #zerishluxestudio',
-    likes: 388,
-    comments: 24,
-    location: 'Khader Nawaz Khan Rd, Chennai',
-    jewellery: 'Dainty Pearl Link Bracelet'
-  },
-  {
-    id: 'post-3',
-    imageUrl: 'https://images.unsplash.com/photo-1635767798638-3e25273a8236?q=80&w=600&auto=format&fit=crop',
-    handle: '@meerapillai_tvm',
-    caption: 'Pure organic perfection. The Baroque Pearl Drops are a dream. Weightless, gorgeous, and matching with everything! 🌸🦪 #OrganicModern #WaterproofLuxury #zerishluxestudio',
-    likes: 512,
-    comments: 15,
-    location: 'Trivandrum, Kerala',
-    jewellery: 'Baroque Pearl Drops'
-  },
-  {
-    id: 'post-4',
-    imageUrl: 'https://images.unsplash.com/photo-1611085583191-a3b1a30d5a41?q=80&w=600&auto=format&fit=crop',
-    handle: '@divyakrishnan_coimbatore',
-    caption: 'Stacked cuffs for that effortless structural vibe. Loving this highly-polished open bar cuff. Zero tarnishing after months of daily wear. ⚡✨ #EverydayLuxury #TarnishFree #zerishluxestudio',
-    likes: 295,
-    comments: 12,
-    location: 'Coimbatore, Tamil Nadu',
-    jewellery: 'Minimalist Horizon Cuff'
-  },
-  {
-    id: 'post-5',
-    imageUrl: 'https://images.unsplash.com/photo-1602751584552-8ba73aad10e1?q=80&w=600&auto=format&fit=crop',
-    handle: '@aparnamenon.kozhikode',
-    caption: 'The way the satin beads catch the evening light... purely magical. Zerish Luxe packaging makes unboxing feel like absolute royalty. 🎁👑 #SelfLoveGift #BespokeJewels #zerishluxestudio',
-    likes: 624,
-    comments: 42,
-    location: 'Kozhikode, Kerala',
-    jewellery: 'Satin Bead Bracelet'
-  },
-  {
-    id: 'post-6',
-    imageUrl: 'https://images.unsplash.com/photo-1626784215021-2e39ac514150?q=80&w=600&auto=format&fit=crop',
-    handle: '@karthik_selvam_cbe',
-    caption: 'Gifting solved perfectly. The presentation is so premium, and she is in love with the wave-shaped hair pin! High-polish brass art. 🌊💫 #LuxeGifting #SustainableLuxury #zerishluxestudio',
-    likes: 411,
-    comments: 9,
-    location: 'Coimbatore, Tamil Nadu',
-    jewellery: 'Sculptural Brass Wave Pin'
-  }
-];
+const INSTAGRAM_POSTS: InstagramPost[] = [];
 
 interface InstagramGalleryProps {
   posts?: InstagramPost[];
@@ -125,52 +62,60 @@ export default function InstagramGallery({ posts = [] }: InstagramGalleryProps) 
         </div>
 
         {/* Instagrid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          {displayPosts.map((post) => {
-            const isLiked = likedPosts.includes(post.id);
-            return (
-              <div 
-                key={post.id}
-                onClick={() => setActivePost(post)}
-                className="group relative aspect-square bg-linen/25 overflow-hidden cursor-pointer border border-espresso/5 hover:shadow-lg transition-shadow duration-300"
-              >
-                <img 
-                  src={post.imageUrl} 
-                  alt={post.handle} 
-                  className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700"
-                  referrerPolicy="no-referrer"
-                  loading="lazy"
-                />
+        {displayPosts.length === 0 ? (
+          <div className="text-center py-16 px-4 border border-dashed border-espresso/15 bg-linen/10 rounded-sm max-w-xl mx-auto">
+            <Instagram className="w-8 h-8 text-espresso/40 mx-auto mb-3 stroke-[1.25]" />
+            <p className="font-serif text-sm italic text-espresso/60">Our Studio Styling Wall is currently being curated.</p>
+            <p className="text-[10px] uppercase tracking-widest text-taupe mt-1">Our brand administrator will publish styling videos and customer feature posts soon.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {displayPosts.map((post) => {
+              const isLiked = likedPosts.includes(post.id);
+              return (
+                <div 
+                  key={post.id}
+                  onClick={() => setActivePost(post)}
+                  className="group relative aspect-square bg-linen/25 overflow-hidden cursor-pointer border border-espresso/5 hover:shadow-lg transition-shadow duration-300"
+                >
+                  <img 
+                    src={post.imageUrl} 
+                    alt={post.handle} 
+                    className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700"
+                    referrerPolicy="no-referrer"
+                    loading="lazy"
+                  />
 
-                {/* Video Play Icon overlay */}
-                {post.videoUrl && (
-                  <div className="absolute top-2 right-2 bg-espresso/75 text-white p-1 rounded-full backdrop-blur-xs z-10 transition-transform group-hover:scale-110">
-                    <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
-                      <path d="M8 5v14l11-7z" />
-                    </svg>
-                  </div>
-                )}
-                
-                {/* Hover overlay stats */}
-                <div className="absolute inset-0 bg-espresso/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center text-white space-y-2">
-                  <Instagram className="w-5 h-5 mb-1 text-[#FAF8F6]" />
-                  <p className="text-[10px] tracking-wider font-semibold">{post.handle}</p>
+                  {/* Video Play Icon overlay */}
+                  {post.videoUrl && (
+                    <div className="absolute top-2 right-2 bg-espresso/75 text-white p-1 rounded-full backdrop-blur-xs z-10 transition-transform group-hover:scale-110">
+                      <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    </div>
+                  )}
                   
-                  <div className="flex items-center space-x-4 text-xs pt-1">
-                    <span className="flex items-center space-x-1">
-                      <Heart className={`w-3.5 h-3.5 ${isLiked ? 'fill-rose-500 text-rose-500' : 'fill-white text-white'}`} />
-                      <span>{post.likes + (isLiked ? 1 : 0)}</span>
-                    </span>
-                    <span className="flex items-center space-x-1">
-                      <MessageCircle className="w-3.5 h-3.5 fill-white text-white" />
-                      <span>{post.comments}</span>
-                    </span>
+                  {/* Hover overlay stats */}
+                  <div className="absolute inset-0 bg-espresso/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center text-white space-y-2">
+                    <Instagram className="w-5 h-5 mb-1 text-[#FAF8F6]" />
+                    <p className="text-[10px] tracking-wider font-semibold">{post.handle}</p>
+                    
+                    <div className="flex items-center space-x-4 text-xs pt-1">
+                      <span className="flex items-center space-x-1">
+                        <Heart className={`w-3.5 h-3.5 ${isLiked ? 'fill-rose-500 text-rose-500' : 'fill-white text-white'}`} />
+                        <span>{post.likes + (isLiked ? 1 : 0)}</span>
+                      </span>
+                      <span className="flex items-center space-x-1">
+                        <MessageCircle className="w-3.5 h-3.5 fill-white text-white" />
+                        <span>{post.comments}</span>
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Lightbox Modal */}
