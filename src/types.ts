@@ -89,3 +89,16 @@ export interface CategorySetting {
   imageUrl: string;
 }
 
+export interface InstagramPost {
+  id: string;
+  imageUrl: string;
+  videoUrl?: string;
+  handle: string;
+  caption: string;
+  likes: number;
+  comments: number;
+  location: string;
+  jewellery: string;
+}
+
+
