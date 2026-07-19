@@ -18,9 +18,12 @@ import {
   Settings,
   Sparkles,
   Star,
-  MessageSquare
+  MessageSquare,
+  Instagram,
+  Camera,
+  Video
 } from 'lucide-react';
-import { Product, Order, Coupon, SalesAnalytics, Testimonial, UserAccount, CategorySetting } from '../types';
+import { Product, Order, Coupon, SalesAnalytics, Testimonial, UserAccount, CategorySetting, InstagramPost } from '../types';
 import { PRESET_IMAGE_TEMPLATES } from '../data';
 
 interface SellerPortalProps {
@@ -44,6 +47,9 @@ interface SellerPortalProps {
   onDeleteReview?: (id: string) => void;
   categories?: CategorySetting[];
   onUpdateCategories?: (categories: CategorySetting[]) => Promise<void> | void;
+  instagramPosts?: InstagramPost[];
+  onAddInstagramPost?: (post: InstagramPost) => Promise<void> | void;
+  onDeleteInstagramPost?: (id: string) => Promise<void> | void;
 }
 
 export default function SellerPortal({
@@ -66,7 +72,10 @@ export default function SellerPortal({
   reviews = [],
   onDeleteReview,
   categories = [],
-  onUpdateCategories
+  onUpdateCategories,
+  instagramPosts = [],
+  onAddInstagramPost,
+  onDeleteInstagramPost
 }: SellerPortalProps) {
   // Auth states
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -92,6 +101,15 @@ export default function SellerPortal({
   const [additionalImages, setAdditionalImages] = useState<string[]>([]);
   const [addImgUrlInput, setAddImgUrlInput] = useState('');
   const [additionalUploading, setAdditionalUploading] = useState(false);
+
+  // Studio form states
+  const [studioHandle, setStudioHandle] = useState('@');
+  const [studioImageUrl, setStudioImageUrl] = useState('');
+  const [studioVideoUrl, setStudioVideoUrl] = useState('');
+  const [studioCaption, setStudioCaption] = useState('');
+  const [studioLocation, setStudioLocation] = useState('');
+  const [studioJewellery, setStudioJewellery] = useState('');
+  const [studioIsSubmitting, setStudioIsSubmitting] = useState(false);
 
   const compressImageToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -358,7 +376,7 @@ export default function SellerPortal({
   };
 
   // Active sub-section in Admin Dashboard
-  const [adminTab, setAdminTab] = useState<'analytics' | 'catalog' | 'orders' | 'customers' | 'coupons' | 'settings' | 'reviews'>('analytics');
+  const [adminTab, setAdminTab] = useState<'analytics' | 'catalog' | 'orders' | 'customers' | 'coupons' | 'settings' | 'reviews' | 'studio'>('analytics');
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -617,7 +635,7 @@ export default function SellerPortal({
                 
                 {/* Internal Navigation Tabs */}
                 <div className="flex border-b border-espresso/10 text-[10px] font-bold uppercase tracking-wider text-taupe bg-[#FAF8F6]">
-                  {(['analytics', 'catalog', 'orders', 'customers', 'coupons', 'reviews', 'settings'] as const).map(tab => (
+                  {(['analytics', 'catalog', 'orders', 'customers', 'coupons', 'reviews', 'settings', 'studio'] as const).map(tab => (
                     <button
                       key={tab}
                       onClick={() => setAdminTab(tab)}
@@ -627,7 +645,7 @@ export default function SellerPortal({
                           : 'border-transparent hover:text-espresso hover:bg-linen/10'
                       }`}
                     >
-                      {tab === 'analytics' ? 'Overview' : tab === 'catalog' ? 'Products' : tab === 'orders' ? 'Enquiries' : tab === 'customers' ? 'Customers' : tab === 'coupons' ? 'Coupons' : tab === 'reviews' ? 'Reviews' : 'Settings'}
+                      {tab === 'analytics' ? 'Overview' : tab === 'catalog' ? 'Products' : tab === 'orders' ? 'Enquiries' : tab === 'customers' ? 'Customers' : tab === 'coupons' ? 'Coupons' : tab === 'reviews' ? 'Reviews' : tab === 'settings' ? 'Settings' : 'Studio'}
                     </button>
                   ))}
                 </div>
@@ -2301,6 +2319,207 @@ export default function SellerPortal({
                           ))}
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {/* ========================================== */}
+                  {/* --- TAB H: ZERISH LUXE STUDIO (INSTAGRAM) --- */}
+                  {/* ========================================== */}
+                  {adminTab === 'studio' && (
+                    <div className="space-y-6 animate-fade-in">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-espresso/10 p-5 rounded-xs shadow-2xs">
+                        <div className="space-y-1">
+                          <h4 className="font-serif text-base font-bold text-espresso flex items-center space-x-2">
+                            <Instagram className="w-4 h-4 text-terracotta" />
+                            <span>Zerish Luxe Studio (#zerishluxestudio)</span>
+                          </h4>
+                          <p className="text-[10px] text-taupe uppercase tracking-wider font-semibold">
+                            Publish Instagram-style photos & videos directly to your website gallery.
+                          </p>
+                        </div>
+                        <div className="text-center px-4">
+                          <p className="text-[9px] text-taupe font-extrabold uppercase">Total Posts</p>
+                          <p className="text-lg font-serif font-bold text-espresso">{instagramPosts.length}</p>
+                        </div>
+                      </div>
+
+                      {/* Add New Studio Post Form */}
+                      <div className="bg-white border border-espresso/10 p-5 rounded-xs shadow-3xs space-y-4">
+                        <h5 className="font-serif text-xs font-bold text-espresso uppercase tracking-wider border-b border-espresso/5 pb-2">
+                          Add New Instagram Post or Video
+                        </h5>
+                        <form 
+                          onSubmit={async (e) => {
+                            e.preventDefault();
+                            if (!studioImageUrl) {
+                              alert('Please provide a Cover Image URL');
+                              return;
+                            }
+                            setStudioIsSubmitting(true);
+                            try {
+                              if (onAddInstagramPost) {
+                                const finalPost: InstagramPost = {
+                                  id: 'post-' + Date.now(),
+                                  handle: studioHandle || '@zerishluxe.studio',
+                                  imageUrl: studioImageUrl,
+                                  videoUrl: studioVideoUrl || undefined,
+                                  caption: studioCaption || '#zerishluxestudio',
+                                  likes: Math.floor(Math.random() * 400) + 100,
+                                  comments: Math.floor(Math.random() * 30) + 5,
+                                  location: studioLocation || 'Kochi, Kerala',
+                                  jewellery: studioJewellery || 'Zerish Luxe Fine Jewelry'
+                                };
+                                await onAddInstagramPost(finalPost);
+                                // Reset form
+                                setStudioHandle('@');
+                                setStudioImageUrl('');
+                                setStudioVideoUrl('');
+                                setStudioCaption('');
+                                setStudioLocation('');
+                                setStudioJewellery('');
+                                alert('Studio post added successfully!');
+                              }
+                            } catch (err: any) {
+                              alert('Error: ' + err.message);
+                            } finally {
+                              setStudioIsSubmitting(false);
+                            }
+                          }}
+                          className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                        >
+                          <div className="space-y-1">
+                            <label className="text-[10px] uppercase tracking-wider font-bold text-espresso">Instagram Handle</label>
+                            <input 
+                              type="text" 
+                              required
+                              placeholder="@handle" 
+                              value={studioHandle} 
+                              onChange={(e) => setStudioHandle(e.target.value)}
+                              className="w-full border border-espresso/10 p-2 text-xs bg-[#FAF8F6] focus:border-terracotta focus:outline-hidden"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[10px] uppercase tracking-wider font-bold text-espresso">Location Name</label>
+                            <input 
+                              type="text" 
+                              required
+                              placeholder="e.g. Kochi, Kerala" 
+                              value={studioLocation} 
+                              onChange={(e) => setStudioLocation(e.target.value)}
+                              className="w-full border border-espresso/10 p-2 text-xs bg-[#FAF8F6] focus:border-terracotta focus:outline-hidden"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[10px] uppercase tracking-wider font-bold text-espresso">Featured Jewellery/Product</label>
+                            <input 
+                              type="text" 
+                              required
+                              placeholder="e.g. Herringbone Flat Chain" 
+                              value={studioJewellery} 
+                              onChange={(e) => setStudioJewellery(e.target.value)}
+                              className="w-full border border-espresso/10 p-2 text-xs bg-[#FAF8F6] focus:border-terracotta focus:outline-hidden"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[10px] uppercase tracking-wider font-bold text-espresso">Cover Image URL</label>
+                            <input 
+                              type="text" 
+                              required
+                              placeholder="https://images.unsplash.com/photo-..." 
+                              value={studioImageUrl} 
+                              onChange={(e) => setStudioImageUrl(e.target.value)}
+                              className="w-full border border-espresso/10 p-2 text-xs bg-[#FAF8F6] focus:border-terracotta focus:outline-hidden"
+                            />
+                          </div>
+
+                          <div className="space-y-1 md:col-span-2">
+                            <label className="text-[10px] uppercase tracking-wider font-bold text-espresso">Video URL (Optional - direct .mp4 link)</label>
+                            <input 
+                              type="text" 
+                              placeholder="e.g. https://assets.mixkit.co/videos/preview/...mp4" 
+                              value={studioVideoUrl} 
+                              onChange={(e) => setStudioVideoUrl(e.target.value)}
+                              className="w-full border border-espresso/10 p-2 text-xs bg-[#FAF8F6] focus:border-terracotta focus:outline-hidden"
+                            />
+                            <p className="text-[9px] text-taupe">Provide a direct MP4 URL to make this post show up as an interactive video player on your website's gallery.</p>
+                          </div>
+
+                          <div className="space-y-1 md:col-span-2">
+                            <label className="text-[10px] uppercase tracking-wider font-bold text-espresso">Caption (with hashtags)</label>
+                            <textarea 
+                              required
+                              rows={3}
+                              placeholder="e.g. Adored by everyone. Super waterproof... #zerishluxestudio #antitarnish" 
+                              value={studioCaption} 
+                              onChange={(e) => setStudioCaption(e.target.value)}
+                              className="w-full border border-espresso/10 p-2 text-xs bg-[#FAF8F6] focus:border-terracotta focus:outline-hidden resize-none"
+                            />
+                          </div>
+
+                          <div className="md:col-span-2 pt-2">
+                            <button 
+                              type="submit"
+                              disabled={studioIsSubmitting}
+                              className="w-full py-2.5 bg-espresso hover:bg-terracotta text-white text-[10px] uppercase tracking-widest font-extrabold shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                            >
+                              {studioIsSubmitting ? 'Publishing Post...' : 'Publish Studio Post & Video'}
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+
+                      {/* Existing Posts Grid */}
+                      <div className="space-y-3">
+                        <h5 className="font-serif text-xs font-bold text-espresso uppercase tracking-wider">
+                          Active Studio Posts
+                        </h5>
+                        {instagramPosts.length === 0 ? (
+                          <div className="text-center py-8 bg-white border border-espresso/10 rounded-xs">
+                            <p className="text-xs text-taupe">No studio posts found.</p>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                            {instagramPosts.map((post) => (
+                              <div key={post.id} className="bg-white border border-espresso/10 p-3 rounded-xs flex flex-col justify-between space-y-2 relative group hover:border-terracotta/30 transition-all">
+                                <div className="aspect-square w-full bg-linen relative overflow-hidden rounded-xs">
+                                  {post.videoUrl ? (
+                                    <video src={post.videoUrl} className="w-full h-full object-cover" muted />
+                                  ) : (
+                                    <img src={post.imageUrl} alt={post.handle} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                  )}
+                                  {post.videoUrl && (
+                                    <div className="absolute top-1 right-1 bg-espresso/80 text-white p-1 rounded-full text-[8px] z-10 font-bold uppercase tracking-wider px-1.5 py-0.5">
+                                      📹 VIDEO
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="pt-1">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-extrabold text-espresso">{post.handle}</span>
+                                    {onDeleteInstagramPost && (
+                                      <button 
+                                        type="button"
+                                        onClick={() => {
+                                          if (confirm('Are you sure you want to delete this studio post?')) {
+                                            onDeleteInstagramPost(post.id);
+                                          }
+                                        }}
+                                        className="p-1 text-espresso/40 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-all cursor-pointer"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                  <p className="text-[9px] text-taupe truncate mt-1">{post.caption}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
 
