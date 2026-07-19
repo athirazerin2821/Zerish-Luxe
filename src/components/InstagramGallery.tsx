@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Instagram, Heart, MessageCircle, X, Check, UserPlus } from 'lucide-react';
 
-interface InstagramPost {
+export interface InstagramPost {
   id: string;
   imageUrl: string;
+  videoUrl?: string;
   handle: string;
   caption: string;
   likes: number;
@@ -16,8 +17,9 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
   {
     id: 'post-1',
     imageUrl: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?q=80&w=600&auto=format&fit=crop',
+    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-holding-a-gold-ring-close-up-41584-large.mp4',
     handle: '@anjali.nair_kochi',
-    caption: 'Waterproof, sweatproof, and absolutely stunning. Worn my Herringbone Flat Chain through endless beach trips and it still looks liquid gold! ✨🏖️ #ZerishLuxe #AntiTarnish',
+    caption: 'Waterproof, sweatproof, and absolutely stunning. Worn my Herringbone Flat Chain through endless beach trips and it still looks liquid gold! ✨🏖️ #ZerishLuxe #AntiTarnish #zerishluxestudio',
     likes: 420,
     comments: 18,
     location: 'Fort Kochi Beach',
@@ -26,8 +28,9 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
   {
     id: 'post-2',
     imageUrl: 'https://images.unsplash.com/photo-1573408301185-9146fe634ad0?q=80&w=600&auto=format&fit=crop',
+    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-shining-gold-wedding-rings-41583-large.mp4',
     handle: '@keerthana_chennai_edit',
-    caption: 'My absolute favorite everyday companion. Elegant layers that transition seamlessly from office meetings to evening cafes. ☕💎 #MinimalElegance #FineJewelry',
+    caption: 'My absolute favorite everyday companion. Elegant layers that transition seamlessly from office meetings to evening cafes. ☕💎 #MinimalElegance #FineJewelry #zerishluxestudio',
     likes: 388,
     comments: 24,
     location: 'Khader Nawaz Khan Rd, Chennai',
@@ -37,7 +40,7 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     id: 'post-3',
     imageUrl: 'https://images.unsplash.com/photo-1635767798638-3e25273a8236?q=80&w=600&auto=format&fit=crop',
     handle: '@meerapillai_tvm',
-    caption: 'Pure organic perfection. The Baroque Pearl Drops are a dream. Weightless, gorgeous, and matching with everything! 🌸🦪 #OrganicModern #WaterproofLuxury',
+    caption: 'Pure organic perfection. The Baroque Pearl Drops are a dream. Weightless, gorgeous, and matching with everything! 🌸🦪 #OrganicModern #WaterproofLuxury #zerishluxestudio',
     likes: 512,
     comments: 15,
     location: 'Trivandrum, Kerala',
@@ -47,7 +50,7 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     id: 'post-4',
     imageUrl: 'https://images.unsplash.com/photo-1611085583191-a3b1a30d5a41?q=80&w=600&auto=format&fit=crop',
     handle: '@divyakrishnan_coimbatore',
-    caption: 'Stacked cuffs for that effortless structural vibe. Loving this highly-polished open bar cuff. Zero tarnishing after months of daily wear. ⚡✨ #EverydayLuxury #TarnishFree',
+    caption: 'Stacked cuffs for that effortless structural vibe. Loving this highly-polished open bar cuff. Zero tarnishing after months of daily wear. ⚡✨ #EverydayLuxury #TarnishFree #zerishluxestudio',
     likes: 295,
     comments: 12,
     location: 'Coimbatore, Tamil Nadu',
@@ -57,7 +60,7 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     id: 'post-5',
     imageUrl: 'https://images.unsplash.com/photo-1602751584552-8ba73aad10e1?q=80&w=600&auto=format&fit=crop',
     handle: '@aparnamenon.kozhikode',
-    caption: 'The way the satin beads catch the evening light... purely magical. Zerish Luxe packaging makes unboxing feel like absolute royalty. 🎁👑 #SelfLoveGift #BespokeJewels',
+    caption: 'The way the satin beads catch the evening light... purely magical. Zerish Luxe packaging makes unboxing feel like absolute royalty. 🎁👑 #SelfLoveGift #BespokeJewels #zerishluxestudio',
     likes: 624,
     comments: 42,
     location: 'Kozhikode, Kerala',
@@ -67,7 +70,7 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     id: 'post-6',
     imageUrl: 'https://images.unsplash.com/photo-1626784215021-2e39ac514150?q=80&w=600&auto=format&fit=crop',
     handle: '@karthik_selvam_cbe',
-    caption: 'Gifting solved perfectly. The presentation is so premium, and she is in love with the wave-shaped hair pin! High-polish brass art. 🌊💫 #LuxeGifting #SustainableLuxury',
+    caption: 'Gifting solved perfectly. The presentation is so premium, and she is in love with the wave-shaped hair pin! High-polish brass art. 🌊💫 #LuxeGifting #SustainableLuxury #zerishluxestudio',
     likes: 411,
     comments: 9,
     location: 'Coimbatore, Tamil Nadu',
@@ -75,10 +78,16 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
   }
 ];
 
-export default function InstagramGallery() {
+interface InstagramGalleryProps {
+  posts?: InstagramPost[];
+}
+
+export default function InstagramGallery({ posts = [] }: InstagramGalleryProps) {
   const [activePost, setActivePost] = useState<InstagramPost | null>(null);
   const [likedPosts, setLikedPosts] = useState<string[]>([]);
   const [following, setFollowing] = useState<string[]>([]);
+
+  const displayPosts = posts && posts.length > 0 ? posts : INSTAGRAM_POSTS;
 
   const toggleLike = (postId: string) => {
     if (likedPosts.includes(postId)) {
@@ -111,13 +120,13 @@ export default function InstagramGallery() {
           </h2>
           <div className="w-12 h-[1px] bg-taupe mx-auto mt-4"></div>
           <p className="text-sm text-espresso/70 mt-3">
-            Join our luxury circle. Tag <strong className="text-espresso">#ZerishLuxeCollectors</strong> on Instagram to be featured on our everyday styling wall.
+            Join our luxury circle. Tag <strong className="text-espresso">#zerishluxestudio</strong> on Instagram to be featured on our everyday styling wall.
           </p>
         </div>
 
         {/* Instagrid */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          {INSTAGRAM_POSTS.map((post) => {
+          {displayPosts.map((post) => {
             const isLiked = likedPosts.includes(post.id);
             return (
               <div 
@@ -132,6 +141,15 @@ export default function InstagramGallery() {
                   referrerPolicy="no-referrer"
                   loading="lazy"
                 />
+
+                {/* Video Play Icon overlay */}
+                {post.videoUrl && (
+                  <div className="absolute top-2 right-2 bg-espresso/75 text-white p-1 rounded-full backdrop-blur-xs z-10 transition-transform group-hover:scale-110">
+                    <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  </div>
+                )}
                 
                 {/* Hover overlay stats */}
                 <div className="absolute inset-0 bg-espresso/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center text-white space-y-2">
@@ -175,14 +193,26 @@ export default function InstagramGallery() {
               <X className="w-4 h-4" />
             </button>
 
-            {/* Left Post Image */}
-            <div className="aspect-square bg-linen relative overflow-hidden flex items-center">
-              <img 
-                src={activePost.imageUrl} 
-                alt={activePost.handle} 
-                className="w-full h-full object-cover" 
-                referrerPolicy="no-referrer"
-              />
+            {/* Left Post Image or Video */}
+            <div className="aspect-square bg-linen relative overflow-hidden flex items-center justify-center">
+              {activePost.videoUrl ? (
+                <video 
+                  src={activePost.videoUrl} 
+                  className="w-full h-full object-cover" 
+                  controls
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                />
+              ) : (
+                <img 
+                  src={activePost.imageUrl} 
+                  alt={activePost.handle} 
+                  className="w-full h-full object-cover" 
+                  referrerPolicy="no-referrer"
+                />
+              )}
               <div className="absolute bottom-3 left-3 bg-espresso/65 text-white text-[10px] uppercase tracking-wider px-2.5 py-1 backdrop-blur-xs">
                 📍 {activePost.location}
               </div>
