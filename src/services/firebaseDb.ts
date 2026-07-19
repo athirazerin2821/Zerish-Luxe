@@ -10,8 +10,73 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
-import { Product, Order, Coupon, Testimonial, UserAccount, CategorySetting } from '../types';
+import { Product, Order, Coupon, Testimonial, UserAccount, CategorySetting, InstagramPost } from '../types';
 import { INITIAL_PRODUCTS, TESTIMONIALS } from '../data';
+
+export const DEFAULT_INSTAGRAM_POSTS: InstagramPost[] = [
+  {
+    id: 'post-1',
+    imageUrl: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?q=80&w=600&auto=format&fit=crop',
+    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-holding-a-gold-ring-close-up-41584-large.mp4',
+    handle: '@anjali.nair_kochi',
+    caption: 'Waterproof, sweatproof, and absolutely stunning. Worn my Herringbone Flat Chain through endless beach trips and it still looks liquid gold! ✨🏖️ #ZerishLuxe #AntiTarnish #zerishluxestudio',
+    likes: 420,
+    comments: 18,
+    location: 'Fort Kochi Beach',
+    jewellery: 'Herringbone Flat Chain'
+  },
+  {
+    id: 'post-2',
+    imageUrl: 'https://images.unsplash.com/photo-1573408301185-9146fe634ad0?q=80&w=600&auto=format&fit=crop',
+    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-shining-gold-wedding-rings-41583-large.mp4',
+    handle: '@keerthana_chennai_edit',
+    caption: 'My absolute favorite everyday companion. Elegant layers that transition seamlessly from office meetings to evening cafes. ☕💎 #MinimalElegance #FineJewelry #zerishluxestudio',
+    likes: 388,
+    comments: 24,
+    location: 'Khader Nawaz Khan Rd, Chennai',
+    jewellery: 'Dainty Pearl Link Bracelet'
+  },
+  {
+    id: 'post-3',
+    imageUrl: 'https://images.unsplash.com/photo-1635767798638-3e25273a8236?q=80&w=600&auto=format&fit=crop',
+    handle: '@meerapillai_tvm',
+    caption: 'Pure organic perfection. The Baroque Pearl Drops are a dream. Weightless, gorgeous, and matching with everything! 🌸🦪 #OrganicModern #WaterproofLuxury #zerishluxestudio',
+    likes: 512,
+    comments: 15,
+    location: 'Trivandrum, Kerala',
+    jewellery: 'Baroque Pearl Drops'
+  },
+  {
+    id: 'post-4',
+    imageUrl: 'https://images.unsplash.com/photo-1611085583191-a3b1a30d5a41?q=80&w=600&auto=format&fit=crop',
+    handle: '@divyakrishnan_coimbatore',
+    caption: 'Stacked cuffs for that effortless structural vibe. Loving this highly-polished open bar cuff. Zero tarnishing after months of daily wear. ⚡✨ #EverydayLuxury #TarnishFree #zerishluxestudio',
+    likes: 295,
+    comments: 12,
+    location: 'Coimbatore, Tamil Nadu',
+    jewellery: 'Minimalist Horizon Cuff'
+  },
+  {
+    id: 'post-5',
+    imageUrl: 'https://images.unsplash.com/photo-1602751584552-8ba73aad10e1?q=80&w=600&auto=format&fit=crop',
+    handle: '@aparnamenon.kozhikode',
+    caption: 'The way the satin beads catch the evening light... purely magical. Zerish Luxe packaging makes unboxing feel like absolute royalty. 🎁👑 #SelfLoveGift #BespokeJewels #zerishluxestudio',
+    likes: 624,
+    comments: 42,
+    location: 'Kozhikode, Kerala',
+    jewellery: 'Satin Bead Bracelet'
+  },
+  {
+    id: 'post-6',
+    imageUrl: 'https://images.unsplash.com/photo-1626784215021-2e39ac514150?q=80&w=600&auto=format&fit=crop',
+    handle: '@karthik_selvam_cbe',
+    caption: 'Gifting solved perfectly. The presentation is so premium, and she is in love with the wave-shaped hair pin! High-polish brass art. 🌊💫 #LuxeGifting #SustainableLuxury #zerishluxestudio',
+    likes: 411,
+    comments: 9,
+    location: 'Coimbatore, Tamil Nadu',
+    jewellery: 'Sculptural Brass Wave Pin'
+  }
+];
 
 export const DEFAULT_CATEGORIES: CategorySetting[] = [
   {
@@ -138,6 +203,19 @@ export async function seedDatabaseIfEmpty(force = false) {
     }
   } catch (error) {
     console.warn('Non-blocking: Could not seed coupons:', error);
+  }
+
+  // 5. Seed Instagram Posts / Videos (Allowed for anyone)
+  try {
+    const instagramSnapshot = await getDocs(collection(db, 'instagram_posts'));
+    if (instagramSnapshot.empty) {
+      console.log('Seeding initial instagram posts into Firestore...');
+      for (const p of DEFAULT_INSTAGRAM_POSTS) {
+        await setDoc(doc(db, 'instagram_posts', p.id), p);
+      }
+    }
+  } catch (error) {
+    console.warn('Non-blocking: Could not seed instagram posts:', error);
   }
 
   // Set the seeded flag at the end of successful seeding
@@ -295,4 +373,23 @@ export async function getCustomers(): Promise<UserAccount[]> {
   });
   return customers;
 }
+
+// Instagram Posts API
+export async function getInstagramPosts(): Promise<InstagramPost[]> {
+  const querySnapshot = await getDocs(collection(db, 'instagram_posts'));
+  const posts: InstagramPost[] = [];
+  querySnapshot.forEach((docSnap) => {
+    posts.push(docSnap.data() as InstagramPost);
+  });
+  return posts;
+}
+
+export async function addInstagramPost(post: InstagramPost): Promise<void> {
+  await setDoc(doc(db, 'instagram_posts', post.id), post);
+}
+
+export async function deleteInstagramPost(id: string): Promise<void> {
+  await deleteDoc(doc(db, 'instagram_posts', id));
+}
+
 
