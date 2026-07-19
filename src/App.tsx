@@ -31,7 +31,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 
 // Data and Types
-import { Product, CartItem, Order, Coupon, OrderDetails, Testimonial, UserAccount, CategorySetting } from './types';
+import { Product, CartItem, Order, Coupon, OrderDetails, Testimonial, UserAccount, CategorySetting, InstagramPost } from './types';
 import { INITIAL_PRODUCTS, TESTIMONIALS } from './data';
 
 // Firebase Services
@@ -59,6 +59,9 @@ import {
   getCustomers,
   getCategories,
   updateCategories,
+  getInstagramPosts,
+  addInstagramPost,
+  deleteInstagramPost,
   DEFAULT_CATEGORIES
 } from './services/firebaseDb';
 
@@ -179,6 +182,18 @@ export default function App() {
     return TESTIMONIALS;
   });
 
+  const [instagramPosts, setInstagramPosts] = useState<InstagramPost[]>(() => {
+    const saved = localStorage.getItem('zl_instagram_posts');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return [];
+      }
+    }
+    return [];
+  });
+
   const [categories, setCategories] = useState<CategorySetting[]>(() => {
     const saved = localStorage.getItem('zl_categories');
     return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES;
@@ -187,6 +202,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('zl_reviews', JSON.stringify(reviews));
   }, [reviews]);
+
+  useEffect(() => {
+    localStorage.setItem('zl_instagram_posts', JSON.stringify(instagramPosts));
+  }, [instagramPosts]);
 
   useEffect(() => {
     localStorage.setItem('zl_categories', JSON.stringify(categories));
@@ -244,6 +263,7 @@ export default function App() {
       getReviews().then(setReviews).catch(err => console.error('Firestore getReviews error:', err));
       getHeroText().then(setHeroText).catch(err => console.error('Firestore getHeroText error:', err));
       getCategories().then(setCategories).catch(err => console.error('Firestore getCategories error:', err));
+      getInstagramPosts().then(setInstagramPosts).catch(err => console.error('Firestore getInstagramPosts error:', err));
     });
   }, []);
 
@@ -653,6 +673,26 @@ export default function App() {
     }
   };
 
+  const handleAddInstagramPost = async (post: InstagramPost): Promise<void> => {
+    try {
+      await addInstagramPost(post);
+      setInstagramPosts(prev => [post, ...prev]);
+    } catch (err: any) {
+      console.error('Error adding Instagram post:', err);
+      throw err;
+    }
+  };
+
+  const handleDeleteInstagramPost = async (id: string): Promise<void> => {
+    try {
+      await deleteInstagramPost(id);
+      setInstagramPosts(prev => prev.filter(p => p.id !== id));
+    } catch (err: any) {
+      console.error('Error deleting Instagram post:', err);
+      throw err;
+    }
+  };
+
   const handleUpdateProduct = async (updated: Product): Promise<void> => {
     try {
       await updateProduct(updated);
@@ -966,6 +1006,9 @@ export default function App() {
             console.error('Error updating categories in Firestore:', err);
           }
         }}
+        instagramPosts={instagramPosts}
+        onAddInstagramPost={handleAddInstagramPost}
+        onDeleteInstagramPost={handleDeleteInstagramPost}
       />
     );
   }
@@ -1867,7 +1910,7 @@ export default function App() {
       {/* ======================================================== */}
       {/* --- INTEGRATED INSTAGRAM GALLERY --- */}
       {/* ======================================================== */}
-      <InstagramGallery />
+      <InstagramGallery posts={instagramPosts} />
 
       {/* ======================================================== */}
       {/* --- INTEGRATED CONTACT & INSIDER NEWSLETTER FORM --- */}
