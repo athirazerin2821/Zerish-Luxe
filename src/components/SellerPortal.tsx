@@ -234,6 +234,7 @@ export default function SellerPortal({
   const [editMaterial, setEditMaterial] = useState('');
   const [editDims, setEditDims] = useState('');
   const [editImg, setEditImg] = useState('');
+  const [editIsBestSeller, setEditIsBestSeller] = useState(false);
 
   // Multi-select and bulk actions states
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
@@ -450,7 +451,8 @@ export default function SellerPortal({
         description: editDesc,
         material: editMaterial,
         dimensions: editDims,
-        imageUrl: editImg
+        imageUrl: editImg,
+        isBestSeller: editIsBestSeller
       });
       setEditingId(null);
       alert('Product updated successfully!');
@@ -488,6 +490,7 @@ export default function SellerPortal({
     setEditMaterial(p.material || '');
     setEditDims(p.dimensions || '');
     setEditImg(p.imageUrl || '');
+    setEditIsBestSeller(!!p.isBestSeller);
   };
 
   const handleToggleSelectProduct = (id: string) => {
@@ -1591,6 +1594,18 @@ export default function SellerPortal({
                                       />
                                     </div>
 
+                                    <div className="flex items-center space-x-2 py-1 text-xs text-espresso">
+                                      <label className="flex items-center space-x-1.5 cursor-pointer">
+                                        <input 
+                                          type="checkbox" 
+                                          checked={editIsBestSeller}
+                                          onChange={(e) => setEditIsBestSeller(e.target.checked)}
+                                          className="rounded-xs border-espresso/30 text-terracotta focus:ring-terracotta cursor-pointer"
+                                        />
+                                        <span className="text-[10px] uppercase font-bold tracking-wider select-none">Best Seller Badge</span>
+                                      </label>
+                                    </div>
+
                                     <div className="flex justify-end space-x-2 pt-1 border-t border-espresso/5">
                                       <button 
                                         type="button"
@@ -1649,6 +1664,20 @@ export default function SellerPortal({
                                       </div>
                                       
                                       <div className="flex items-center space-x-1.5">
+                                        {/* Quick Best Seller checkbox */}
+                                        <div className="flex items-center space-x-1 mr-1 bg-linen/30 border border-espresso/10 rounded-sm px-1.5 py-1">
+                                          <input 
+                                            type="checkbox"
+                                            checked={!!p.isBestSeller}
+                                            onChange={(e) => onUpdateProduct({ ...p, isBestSeller: e.target.checked })}
+                                            className="rounded-xs border-espresso/30 text-terracotta focus:ring-terracotta cursor-pointer w-3 h-3"
+                                            id={`quick-best-seller-${p.id}`}
+                                          />
+                                          <label htmlFor={`quick-best-seller-${p.id}`} className="text-[8px] uppercase font-bold tracking-wider text-espresso/70 select-none cursor-pointer whitespace-nowrap">
+                                            Best Seller
+                                          </label>
+                                        </div>
+
                                         {/* Quick edit button */}
                                         <button 
                                           onClick={() => startEdit(p)}
