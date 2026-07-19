@@ -115,6 +115,14 @@ const HERO_FRAMES = [
   luxuryJewelryModestBannerV2Img,
 ];
 
+function safeSetItem(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch (e) {
+    console.warn(`Failed to set item '${key}' in localStorage (likely QuotaExceededError):`, e);
+  }
+}
+
 export default function App() {
   const [heroVideoUrl, setHeroVideoUrl] = useState(HERO_VIDEO_URL);
   const [currentFrame, setCurrentFrame] = useState(0);
@@ -130,7 +138,11 @@ export default function App() {
     const saved = localStorage.getItem('zl_products');
     if (!saved) return INITIAL_PRODUCTS;
     try {
-      return JSON.parse(saved) as Product[];
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((p: any) => p && typeof p === 'object' && p.id && p.name);
+      }
+      return INITIAL_PRODUCTS;
     } catch (e) {
       return INITIAL_PRODUCTS;
     }
@@ -138,43 +150,85 @@ export default function App() {
 
   const [cart, setCart] = useState<CartItem[]>(() => {
     const saved = localStorage.getItem('zl_cart');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const parsed = saved ? JSON.parse(saved) : [];
+      if (Array.isArray(parsed)) {
+        return parsed.filter((item: any) => item && item.product && typeof item.product === 'object' && item.product.id);
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
   });
 
   const [wishlist, setWishlist] = useState<string[]>(() => {
     const saved = localStorage.getItem('zl_wishlist');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const parsed = saved ? JSON.parse(saved) : [];
+      return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+    } catch (e) {
+      return [];
+    }
   });
 
   const [orders, setOrders] = useState<Order[]>(() => {
     const saved = localStorage.getItem('zl_orders');
-    if (saved) return JSON.parse(saved);
-    const defaults: Order[] = [];
-    localStorage.setItem('zl_orders', JSON.stringify(defaults));
-    return defaults;
+    try {
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((o: any) => o && typeof o === 'object' && o.id);
+        }
+      }
+      const defaults: Order[] = [];
+      safeSetItem('zl_orders', JSON.stringify(defaults));
+      return defaults;
+    } catch (e) {
+      return [];
+    }
   });
 
   const [coupons, setCoupons] = useState<Coupon[]>(() => {
     const saved = localStorage.getItem('zl_coupons');
-    if (saved) return JSON.parse(saved);
-    const defaults: Coupon[] = [];
-    localStorage.setItem('zl_coupons', JSON.stringify(defaults));
-    return defaults;
+    try {
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((c: any) => c && typeof c === 'object' && c.code);
+        }
+      }
+      const defaults: Coupon[] = [];
+      safeSetItem('zl_coupons', JSON.stringify(defaults));
+      return defaults;
+    } catch (e) {
+      return [];
+    }
   });
 
   const [heroText, setHeroText] = useState(() => {
     const saved = localStorage.getItem('zl_hero_text');
-    return saved ? JSON.parse(saved) : {
-      title: 'Minimal Elegance.',
-      subtitle: 'Everyday Luxury.'
-    };
+    try {
+      return saved ? JSON.parse(saved) : {
+        title: 'Minimal Elegance.',
+        subtitle: 'Everyday Luxury.'
+      };
+    } catch (e) {
+      return {
+        title: 'Minimal Elegance.',
+        subtitle: 'Everyday Luxury.'
+      };
+    }
   });
 
   const [reviews, setReviews] = useState<Testimonial[]>(() => {
     const saved = localStorage.getItem('zl_reviews');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((r: any) => r && typeof r === 'object' && r.id);
+        }
+        return TESTIMONIALS;
       } catch (e) {
         return TESTIMONIALS;
       }
@@ -186,7 +240,11 @@ export default function App() {
     const saved = localStorage.getItem('zl_instagram_posts');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((p: any) => p && typeof p === 'object' && p.id);
+        }
+        return [];
       } catch (e) {
         return [];
       }
@@ -196,19 +254,29 @@ export default function App() {
 
   const [categories, setCategories] = useState<CategorySetting[]>(() => {
     const saved = localStorage.getItem('zl_categories');
-    return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES;
+    if (!saved) return DEFAULT_CATEGORIES;
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        const filtered = parsed.filter((c: any) => c && typeof c === 'object' && c.tabId && c.title);
+        return filtered.length > 0 ? filtered : DEFAULT_CATEGORIES;
+      }
+      return DEFAULT_CATEGORIES;
+    } catch (e) {
+      return DEFAULT_CATEGORIES;
+    }
   });
 
   useEffect(() => {
-    localStorage.setItem('zl_reviews', JSON.stringify(reviews));
+    safeSetItem('zl_reviews', JSON.stringify(reviews));
   }, [reviews]);
 
   useEffect(() => {
-    localStorage.setItem('zl_instagram_posts', JSON.stringify(instagramPosts));
+    safeSetItem('zl_instagram_posts', JSON.stringify(instagramPosts));
   }, [instagramPosts]);
 
   useEffect(() => {
-    localStorage.setItem('zl_categories', JSON.stringify(categories));
+    safeSetItem('zl_categories', JSON.stringify(categories));
   }, [categories]);
 
   // --- UI TRIGGERS ---
@@ -241,7 +309,7 @@ export default function App() {
   const [sellerLoginError, setSellerLoginError] = useState('');
 
   useEffect(() => {
-    localStorage.setItem('zl_view_mode', viewMode);
+    safeSetItem('zl_view_mode', viewMode);
   }, [viewMode]);
 
   // Auth Status listener
@@ -259,11 +327,39 @@ export default function App() {
   // Synchronize customer-facing states with Firestore on mount
   useEffect(() => {
     seedDatabaseIfEmpty().then(() => {
-      getProducts().then(setProducts).catch(err => console.error('Firestore getProducts error:', err));
-      getReviews().then(setReviews).catch(err => console.error('Firestore getReviews error:', err));
-      getHeroText().then(setHeroText).catch(err => console.error('Firestore getHeroText error:', err));
-      getCategories().then(setCategories).catch(err => console.error('Firestore getCategories error:', err));
-      getInstagramPosts().then(setInstagramPosts).catch(err => console.error('Firestore getInstagramPosts error:', err));
+      getProducts().then((prods) => {
+        if (Array.isArray(prods)) {
+          const validProds = prods.filter((p: any) => p && typeof p === 'object' && p.id && p.name);
+          setProducts(validProds);
+        }
+      }).catch(err => console.error('Firestore getProducts error:', err));
+
+      getReviews().then((revs) => {
+        if (Array.isArray(revs)) {
+          const validRevs = revs.filter((r: any) => r && typeof r === 'object' && r.id);
+          setReviews(validRevs);
+        }
+      }).catch(err => console.error('Firestore getReviews error:', err));
+
+      getHeroText().then((ht) => {
+        if (ht && typeof ht === 'object') {
+          setHeroText(ht);
+        }
+      }).catch(err => console.error('Firestore getHeroText error:', err));
+
+      getCategories().then((cats) => {
+        if (Array.isArray(cats)) {
+          const validCats = cats.filter((c: any) => c && typeof c === 'object' && c.tabId && c.title);
+          if (validCats.length > 0) setCategories(validCats);
+        }
+      }).catch(err => console.error('Firestore getCategories error:', err));
+
+      getInstagramPosts().then((posts) => {
+        if (Array.isArray(posts)) {
+          const validPosts = posts.filter((p: any) => p && typeof p === 'object' && p.id);
+          setInstagramPosts(validPosts);
+        }
+      }).catch(err => console.error('Firestore getInstagramPosts error:', err));
     });
   }, []);
 
@@ -358,12 +454,17 @@ export default function App() {
   // --- CUSTOMER USER ACCOUNT ---
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
     const saved = localStorage.getItem('zl_current_user');
-    return saved ? JSON.parse(saved) : null;
+    if (!saved) return null;
+    try {
+      return JSON.parse(saved);
+    } catch (e) {
+      return null;
+    }
   });
 
   useEffect(() => {
     if (currentUser) {
-      localStorage.setItem('zl_current_user', JSON.stringify(currentUser));
+      safeSetItem('zl_current_user', JSON.stringify(currentUser));
       setCheckoutDetails({
         customerName: currentUser.name,
         phoneNumber: currentUser.phoneNumber,
@@ -395,7 +496,7 @@ export default function App() {
   };
 
   // --- SEARCH, FILTERS, & SORTING ---
-  const [priceRange, setPriceRange] = useState(3000);
+  const [priceRange, setPriceRange] = useState(1000);
   const [sortBy, setSortBy] = useState<'price-asc' | 'price-desc' | 'rating' | 'newest'>('newest');
   const [searchGridQuery, setSearchGridQuery] = useState('');
 
@@ -458,27 +559,27 @@ export default function App() {
 
   // Synchronize localStorage
   useEffect(() => {
-    localStorage.setItem('zl_products', JSON.stringify(products));
+    safeSetItem('zl_products', JSON.stringify(products));
   }, [products]);
 
   useEffect(() => {
-    localStorage.setItem('zl_cart', JSON.stringify(cart));
+    safeSetItem('zl_cart', JSON.stringify(cart));
   }, [cart]);
 
   useEffect(() => {
-    localStorage.setItem('zl_wishlist', JSON.stringify(wishlist));
+    safeSetItem('zl_wishlist', JSON.stringify(wishlist));
   }, [wishlist]);
 
   useEffect(() => {
-    localStorage.setItem('zl_orders', JSON.stringify(orders));
+    safeSetItem('zl_orders', JSON.stringify(orders));
   }, [orders]);
 
   useEffect(() => {
-    localStorage.setItem('zl_coupons', JSON.stringify(coupons));
+    safeSetItem('zl_coupons', JSON.stringify(coupons));
   }, [coupons]);
 
   useEffect(() => {
-    localStorage.setItem('zl_hero_text', JSON.stringify(heroText));
+    safeSetItem('zl_hero_text', JSON.stringify(heroText));
   }, [heroText]);
 
   // --- HANDLERS ---
@@ -829,7 +930,9 @@ export default function App() {
   };
 
   // --- FILTERED GRID ALGORITHM ---
-  const filteredProducts = products.filter(p => {
+  const filteredProducts = (products || []).filter(p => {
+    if (!p) return false;
+
     // 1. Tab selection
     let matchTab = false;
     if (activeTab === 'new-arrivals') matchTab = !!p.isNew;
@@ -838,25 +941,35 @@ export default function App() {
     else matchTab = p.category === activeTab;
 
     // 2. Price slider
-    const matchPrice = p.price <= priceRange;
+    const price = typeof p.price === 'number' ? p.price : 0;
+    const matchPrice = price <= priceRange;
 
     // 3. Grid search filter
-    const matchSearch = p.name.toLowerCase().includes(searchGridQuery.toLowerCase()) || 
-      p.description.toLowerCase().includes(searchGridQuery.toLowerCase());
+    const nameStr = p.name || '';
+    const descStr = p.description || '';
+    const matchSearch = nameStr.toLowerCase().includes((searchGridQuery || '').toLowerCase()) || 
+      descStr.toLowerCase().includes((searchGridQuery || '').toLowerCase());
 
     return matchTab && matchPrice && matchSearch;
   });
 
   // Sorting
   const sortedProducts = [...filteredProducts].sort((a, b) => {
-    if (sortBy === 'price-asc') return a.price - b.price;
-    if (sortBy === 'price-desc') return b.price - a.price;
+    const aPrice = typeof a.price === 'number' ? a.price : 0;
+    const bPrice = typeof b.price === 'number' ? b.price : 0;
+    if (sortBy === 'price-asc') return aPrice - bPrice;
+    if (sortBy === 'price-desc') return bPrice - aPrice;
     if (sortBy === 'rating') return (b.rating || 4.8) - (a.rating || 4.8);
     return 0; // newest / default initial order
   });
 
   // Subtotal in Cart Drawer
-  const cartSubtotal = cart.reduce((acc, curr) => acc + curr.product.price * curr.quantity, 0);
+  const cartSubtotal = (cart || []).reduce((acc, curr) => {
+    if (!curr || !curr.product) return acc;
+    const price = typeof curr.product.price === 'number' ? curr.product.price : 0;
+    const quantity = typeof curr.quantity === 'number' ? curr.quantity : 0;
+    return acc + price * quantity;
+  }, 0);
   const isFreeShipping = cartSubtotal >= 499 || cartSubtotal === 0;
   const shippingFee = isFreeShipping ? 0 : 49;
   let discountAmount = 0;
@@ -1092,7 +1205,7 @@ export default function App() {
                 </button>
                 {/* Dropdown elements */}
                 <div className="absolute left-0 mt-1 w-52 bg-[#FAF8F6] border border-espresso/15 shadow-xl rounded-xs py-2 hidden group-hover:block z-50">
-                  {categories.map(cat => (
+                  {(categories || []).filter(Boolean).map(cat => (
                     <button 
                       key={cat.tabId}
                       onClick={() => {
@@ -1233,13 +1346,13 @@ export default function App() {
               <a 
                 href="#shop" 
                 onClick={() => {
-                  setActiveTab('gift-collection');
+                  setActiveTab('new-arrivals');
                   const el = document.getElementById('shop');
                   el?.scrollIntoView({ behavior: 'smooth' });
                 }}
                 className="px-8 py-4 border border-terracotta text-terracotta hover:bg-terracotta hover:text-white text-[11px] uppercase tracking-[0.2em] font-bold text-center transition-all bg-white/40 cursor-pointer hover:scale-[1.02] active:scale-95 duration-200"
               >
-                Gift Collection
+                New Arrivals
               </a>
             </div>
 
@@ -1300,42 +1413,42 @@ export default function App() {
             </div>
           </div>
 
-          {/* 7 Category Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-6 sm:gap-8">
-            {categories.map((cat, idx) => (
-              <div 
-                key={idx}
-                onClick={() => {
-                  setActiveTab(cat.tabId as any);
-                  const el = document.getElementById('shop');
-                  el?.scrollIntoView({ behavior: 'smooth' });
-                }}
-                className="group flex flex-col items-center text-center cursor-pointer select-none"
-              >
-                {/* Image Container */}
-                <div className="relative w-full aspect-square bg-[#FAF8F6] overflow-hidden rounded-xs border border-espresso/5 shadow-xs group-hover:shadow-md group-hover:border-terracotta/30 transition-all duration-300">
-                  <img 
-                    src={cat.imageUrl} 
-                    alt={cat.title} 
-                    className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500"
-                    referrerPolicy="no-referrer"
-                    loading="lazy"
-                  />
-                  <div className="absolute inset-0 bg-espresso/5 group-hover:bg-transparent transition-colors duration-300"></div>
-                </div>
-
-                {/* Dynamic Title */}
-                <span className="font-sans text-[11px] font-extrabold uppercase tracking-widest text-espresso mt-3 group-hover:text-terracotta transition-colors">
-                  {cat.title}
-                </span>
-                {cat.subtitle && (
-                  <span className="font-sans text-[9px] font-bold uppercase tracking-widest text-taupe mt-0.5 border-t border-espresso/10 pt-0.5 w-12 group-hover:text-terracotta transition-colors">
-                    {cat.subtitle}
-                  </span>
-                )}
+        {/* 7 Category Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-6 sm:gap-8">
+          {(categories || []).filter(Boolean).map((cat, idx) => (
+            <div 
+              key={idx}
+              onClick={() => {
+                setActiveTab(cat.tabId as any);
+                const el = document.getElementById('shop');
+                el?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="group flex flex-col items-center text-center cursor-pointer select-none"
+            >
+              {/* Image Container */}
+              <div className="relative w-full aspect-square bg-[#FAF8F6] overflow-hidden rounded-xs border border-espresso/5 shadow-xs group-hover:shadow-md group-hover:border-terracotta/30 transition-all duration-300">
+                <img 
+                  src={cat.imageUrl || ''} 
+                  alt={cat.title || ''} 
+                  className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500"
+                  referrerPolicy="no-referrer"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-espresso/5 group-hover:bg-transparent transition-colors duration-300"></div>
               </div>
-            ))}
-          </div>
+
+              {/* Dynamic Title */}
+              <span className="font-sans text-[11px] font-extrabold uppercase tracking-widest text-espresso mt-3 group-hover:text-terracotta transition-colors">
+                {cat.title}
+              </span>
+              {cat.subtitle && (
+                <span className="font-sans text-[9px] font-bold uppercase tracking-widest text-taupe mt-0.5 border-t border-espresso/10 pt-0.5 w-12 group-hover:text-terracotta transition-colors">
+                  {cat.subtitle}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
 
         </div>
       </section>
@@ -1412,8 +1525,7 @@ export default function App() {
         <div className="flex overflow-x-auto no-scrollbar space-x-3 pb-4 mb-8 border-b border-espresso/10">
           {[
             { id: 'best-sellers', label: 'Best Sellers' },
-            { id: 'gift-collection', label: 'Gift Collection' },
-            ...categories.map(cat => ({ id: cat.tabId, label: cat.title }))
+            ...(categories || []).filter(Boolean).map(cat => ({ id: cat.tabId, label: cat.title }))
           ].map(tab => (
             <button
               key={tab.id}
@@ -1440,8 +1552,8 @@ export default function App() {
             </div>
             <input 
               type="range" 
-              min="800" 
-              max="3000" 
+              min="0" 
+              max="1000" 
               step="50"
               value={priceRange} 
               onChange={(e) => setPriceRange(Number(e.target.value))}
@@ -1753,7 +1865,7 @@ export default function App() {
 
           {/* Grid list of reviews */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
-            {reviews.slice(0, 6).map((rev) => (
+            {(reviews || []).slice(0, 6).filter(Boolean).map((rev) => (
               <div 
                 key={rev.id} 
                 className="bg-[#FAF8F6] border border-espresso/5 p-6 sm:p-8 rounded-xs shadow-2xs space-y-4 hover:shadow-xs transition-shadow duration-300 flex flex-col justify-between"
@@ -1764,7 +1876,7 @@ export default function App() {
                     {Array.from({ length: 5 }).map((_, i) => (
                       <Star 
                         key={i} 
-                        className={`w-3.5 h-3.5 ${i < rev.rating ? 'fill-current' : 'text-espresso/10'}`} 
+                        className={`w-3.5 h-3.5 ${i < (rev.rating || 5) ? 'fill-current' : 'text-espresso/10'}`} 
                       />
                     ))}
                   </div>
@@ -2624,7 +2736,6 @@ export default function App() {
               <div className="p-6 grid grid-cols-2 gap-3.5">
                 {[
                   { id: 'best-sellers', label: 'Best Sellers', count: 'Hot' },
-                  { id: 'gift-collection', label: 'Gift Collection', count: 'New' },
                   { id: 'chains', label: 'Chains', count: null },
                   { id: 'necklaces', label: 'Necklaces', count: null },
                   { id: 'rings', label: 'Rings', count: null },
