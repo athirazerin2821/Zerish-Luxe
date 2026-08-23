@@ -8,7 +8,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     category: 'chains',
     price: 1899,
     originalPrice: 2499,
-    description: 'A sleek, fluid 18k gold-plated chain that rests gracefully against the collarbone. Engineered with a flat snake design that reflects light at every angle. Waterproof and sweatproof for continuous daily wear.',
+    description: 'A sleek, fluid chain that rests gracefully against the collarbone. Engineered with a flat snake design that reflects light at every angle. Waterproof and sweatproof for continuous daily wear.',
     imageUrl: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?q=85&w=1600&auto=format&fit=crop',
     thumbnails: [
       'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?q=85&w=1600&auto=format&fit=crop',
@@ -17,7 +17,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     ],
     isNew: true,
     isBestSeller: true,
-    material: '18k Gold PVD Coating, Anti-Tarnish Finish',
+    material: '',
     dimensions: '16 inches with 2-inch extender',
     rating: 4.9,
     reviewsCount: 38,
@@ -36,7 +36,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?q=85&w=1600&auto=format&fit=crop'
     ],
     isBestSeller: true,
-    material: '18k Gold PVD Coating',
+    material: '',
     dimensions: '17 inches',
     rating: 4.8,
     reviewsCount: 22,
@@ -55,7 +55,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?q=85&w=1600&auto=format&fit=crop'
     ],
     isGift: true,
-    material: 'Heavy PVD 18k Gold Plating',
+    material: '',
     dimensions: '18 inches',
     rating: 5.0,
     reviewsCount: 14,
@@ -74,7 +74,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?q=85&w=1600&auto=format&fit=crop'
     ],
     isNew: true,
-    material: '18k Gold PVD Coating, Waterproof Layer',
+    material: '',
     dimensions: '18 inches with 2-inch extender',
     rating: 4.9,
     reviewsCount: 18,
@@ -96,7 +96,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?q=85&w=1600&auto=format&fit=crop'
     ],
     isNew: true,
-    material: '18k Gold PVD & Brilliant Cut Zirconia',
+    material: '',
     dimensions: '18 inches',
     rating: 4.7,
     reviewsCount: 42,
@@ -115,7 +115,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?q=85&w=1600&auto=format&fit=crop'
     ],
     isBestSeller: true,
-    material: '18k Gold PVD with Satin Relief Polish',
+    material: '',
     dimensions: '18 inches + 2-inch extender',
     rating: 4.9,
     reviewsCount: 29,
@@ -135,7 +135,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     ],
     isGift: true,
     isNew: true,
-    material: 'Heavy 18k Gold PVD Layering',
+    material: '',
     dimensions: '14-inch Choker & 16-inch Pendant set',
     rating: 4.9,
     reviewsCount: 18,
@@ -155,7 +155,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       'https://images.unsplash.com/photo-1573408301185-9146fe634ad0?q=85&w=1600&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1602751584552-8ba73aad10e1?q=85&w=1600&auto=format&fit=crop'
     ],
-    material: '18k Gold PVD & Cultured Fresh Water Seed Pearls',
+    material: '',
     dimensions: '6 inches + 1-inch extender',
     rating: 4.8,
     reviewsCount: 31,
@@ -173,7 +173,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       'https://images.unsplash.com/photo-1602751584552-8ba73aad10e1?q=85&w=1600&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1573408301185-9146fe634ad0?q=85&w=1600&auto=format&fit=crop'
     ],
-    material: 'Satin Finish 18k Gold Plating',
+    material: '',
     dimensions: '6.5 inches',
     rating: 4.6,
     reviewsCount: 16,
@@ -195,7 +195,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     ],
     isNew: true,
     isBestSeller: true,
-    material: '18k Thick Gold PVD Coating',
+    material: '',
     dimensions: 'Adjustable open cuff back',
     rating: 5.0,
     reviewsCount: 52,
@@ -213,7 +213,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       'https://images.unsplash.com/photo-1611085583191-a3b1a30d5a41?q=85&w=1600&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?q=85&w=1600&auto=format&fit=crop'
     ],
-    material: 'Polished 18k Gold PVD Coating',
+    material: '',
     dimensions: 'Standard fit (Adjustable)',
     rating: 4.7,
     reviewsCount: 25,
@@ -235,7 +235,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     ],
     isNew: true,
     isBestSeller: true,
-    material: '18k Gold PVD & Natural Baroque Pearls',
+    material: '',
     dimensions: '1.2 inches drop',
     rating: 4.9,
     reviewsCount: 45,
@@ -247,13 +247,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     name: 'Linear Gold Threaders',
     category: 'drop-earrings',
     price: 1290,
-    description: 'Whisper-thin tarnish-free solid gold-plated bars connected to a delicate box chain that weaves effortlessly through the earlobe. Modern structural elegance, perfect for double piercings.',
+    description: 'Whisper-thin tarnish-free solid bars connected to a delicate box chain that weaves effortlessly through the earlobe. Modern structural elegance, perfect for double piercings.',
     imageUrl: 'https://images.unsplash.com/photo-1605100804763-247f67b3557e?q=85&w=1600&auto=format&fit=crop',
     thumbnails: [
       'https://images.unsplash.com/photo-1605100804763-247f67b3557e?q=85&w=1600&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1635767798638-3e25273a8236?q=85&w=1600&auto=format&fit=crop'
     ],
-    material: '18k Gold PVD Fine Box Chain',
+    material: '',
     dimensions: '3.5 inches total length',
     rating: 4.8,
     reviewsCount: 19,
@@ -273,7 +273,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?q=85&w=1600&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1617038260897-41a1f14a8ca0?q=85&w=1600&auto=format&fit=crop'
     ],
-    material: '18k Gold Plated Hypoallergenic Base',
+    material: '',
     dimensions: '6mm diameter',
     rating: 4.7,
     reviewsCount: 33,
@@ -292,7 +292,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?q=85&w=1600&auto=format&fit=crop'
     ],
     isBestSeller: true,
-    material: '18k Gold PVD, White Zircon',
+    material: '',
     dimensions: '4mm',
     rating: 4.9,
     reviewsCount: 50,
@@ -311,7 +311,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       'https://images.unsplash.com/photo-1617038260897-41a1f14a8ca0?q=85&w=1600&auto=format&fit=crop'
     ],
     isNew: true,
-    material: 'High-Grade 18K Gold PVD Coating',
+    material: '',
     dimensions: '10mm outer diameter, 7mm inner diameter',
     rating: 4.9,
     reviewsCount: 24,
@@ -332,7 +332,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       'https://images.unsplash.com/photo-1590156221122-c241e7f7416f?q=85&w=1600&auto=format&fit=crop'
     ],
     isNew: true,
-    material: 'Solid Lead-free Yellow Brass, Tarnish Resistant coating',
+    material: '',
     dimensions: '4.5 inches length',
     rating: 4.8,
     reviewsCount: 15,
@@ -351,7 +351,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       'https://images.unsplash.com/photo-1626784215021-2e39ac514150?q=85&w=1600&auto=format&fit=crop'
     ],
     isGift: true,
-    material: 'Metal alloy base, Polished Acrylic pearls',
+    material: '',
     dimensions: '3 inches length',
     rating: 4.9,
     reviewsCount: 21,
@@ -368,7 +368,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     thumbnails: [
       'https://images.unsplash.com/photo-1596178065887-1198b6148b2b?q=85&w=1600&auto=format&fit=crop'
     ],
-    material: 'French Clip Mechanism, Organic Mulberry Satin',
+    material: '',
     dimensions: '4 inches long',
     rating: 4.5,
     reviewsCount: 11,
@@ -381,7 +381,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     name: 'Elysian Gold Wave Band',
     category: 'rings',
     price: 1290,
-    description: 'An organic, fluid 18k gold PVD coated wave band. Its sculptural undulations reflect light dynamically, making it a beautiful standalone statement or perfect for stacking.',
+    description: 'An organic, fluid wave band. Its sculptural undulations reflect light dynamically, making it a beautiful standalone statement or perfect for stacking.',
     imageUrl: 'https://images.unsplash.com/photo-1603561591411-07134e71a2a9?q=85&w=1600&auto=format&fit=crop',
     thumbnails: [
       'https://images.unsplash.com/photo-1603561591411-07134e71a2a9?q=85&w=1600&auto=format&fit=crop',
@@ -389,7 +389,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     ],
     isNew: true,
     isBestSeller: true,
-    material: '18k Gold PVD Coating',
+    material: '',
     dimensions: 'Sizes 6, 7, 8 available',
     rating: 4.9,
     reviewsCount: 28,
@@ -408,7 +408,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       'https://images.unsplash.com/photo-1603561591411-07134e71a2a9?q=85&w=1600&auto=format&fit=crop'
     ],
     isBestSeller: true,
-    material: 'Heavy 18k Gold PVD Plating',
+    material: '',
     dimensions: 'Sizes 6, 7, 8 available',
     rating: 4.8,
     reviewsCount: 19,
@@ -426,7 +426,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       'https://images.unsplash.com/photo-1602751584552-8ba73aad10e1?q=85&w=1600&auto=format&fit=crop'
     ],
     isGift: true,
-    material: '18K Gold PVD, Cubic Zirconia',
+    material: '',
     dimensions: 'Sizes 6, 7, 8 available',
     rating: 4.7,
     reviewsCount: 14,
