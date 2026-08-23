@@ -165,6 +165,8 @@ export async function seedDatabaseIfEmpty(force = false) {
   // 5. Seed Orders (Omitted as requested to keep dashboard free of dummy data)
 }
 
+import { optimizeProductForFirestore } from '../utils/imageOptimizer';
+
 // Products API
 export async function getProducts(): Promise<Product[]> {
   const querySnapshot = await getDocs(collection(db, 'products'));
@@ -176,11 +178,13 @@ export async function getProducts(): Promise<Product[]> {
 }
 
 export async function addProduct(product: Product): Promise<void> {
-  await setDoc(doc(db, 'products', product.id), product);
+  const sanitized = await optimizeProductForFirestore(product);
+  await setDoc(doc(db, 'products', sanitized.id), sanitized);
 }
 
 export async function updateProduct(product: Product): Promise<void> {
-  await setDoc(doc(db, 'products', product.id), product);
+  const sanitized = await optimizeProductForFirestore(product);
+  await setDoc(doc(db, 'products', sanitized.id), sanitized);
 }
 
 export async function deleteProduct(id: string): Promise<void> {
