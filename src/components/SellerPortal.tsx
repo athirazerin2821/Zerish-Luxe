@@ -37,6 +37,7 @@ interface SellerPortalProps {
   orders: Order[];
   customers?: UserAccount[];
   onUpdateOrderStatus: (orderId: string, status: 'Pending' | 'Dispatched' | 'Delivered') => void;
+  onDeleteOrder?: (orderId: string) => Promise<void> | void;
   onTogglePaymentStatus?: (orderId: string) => void;
   coupons: Coupon[];
   onAddCoupon: (coupon: Coupon) => void;
@@ -63,6 +64,7 @@ export default function SellerPortal({
   orders,
   customers = [],
   onUpdateOrderStatus,
+  onDeleteOrder,
   onTogglePaymentStatus,
   coupons,
   onAddCoupon,
@@ -91,7 +93,7 @@ export default function SellerPortal({
   const [newProdImg, setNewProdImg] = useState(PRESET_IMAGE_TEMPLATES[0].url);
   const [customImg, setCustomImg] = useState('');
   const [newProdStock, setNewProdStock] = useState(15);
-  const [newProdMaterial, setNewProdMaterial] = useState('316L Stainless Steel');
+  const [newProdMaterial, setNewProdMaterial] = useState('18k Gold PVD Coating, Anti-Tarnish Finish');
   const [newProdDims, setNewProdDims] = useState('');
   const [isNewBadge, setIsNewBadge] = useState(true);
   const [isBestBadge, setIsBestBadge] = useState(false);
@@ -120,8 +122,8 @@ export default function SellerPortal({
         img.src = event.target?.result as string;
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 600;
-          const MAX_HEIGHT = 600;
+          const MAX_WIDTH = 1600;
+          const MAX_HEIGHT = 1600;
           let width = img.width;
           let height = img.height;
 
@@ -144,8 +146,10 @@ export default function SellerPortal({
             resolve(event.target?.result as string);
             return;
           }
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
           ctx.drawImage(img, 0, 0, width, height);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
           resolve(dataUrl);
         };
         img.onerror = (err) => reject(err);
@@ -235,6 +239,112 @@ export default function SellerPortal({
   const [editDims, setEditDims] = useState('');
   const [editImg, setEditImg] = useState('');
   const [editIsBestSeller, setEditIsBestSeller] = useState(false);
+  const [editThumbnails, setEditThumbnails] = useState<string[]>([]);
+  const [editAddImgUrlInput, setEditAddImgUrlInput] = useState('');
+  const [editAdditionalUploading, setEditAdditionalUploading] = useState(false);
+
+  // Enquiries deletion and selection state
+  const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [isBulkDeletingOrders, setIsBulkDeletingOrders] = useState(false);
+
+  const handleEditAddAdditionalUrl = () => {
+    if (!editAddImgUrlInput.trim()) return;
+    setEditThumbnails(prev => [...prev, editAddImgUrlInput.trim()]);
+    setEditAddImgUrlInput('');
+  };
+
+  const handleEditRemoveAdditionalImage = (index: number) => {
+    setEditThumbnails(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleEditAdditionalImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setEditAdditionalUploading(true);
+    try {
+      const { uploadProductImage } = await import('../services/firebaseDb');
+      const url = await Promise.race([
+        uploadProductImage(file),
+        new Promise<string>((_, reject) => 
+          setTimeout(() => reject(new Error('TIMEOUT')), 3500)
+        )
+      ]);
+      setEditThumbnails(prev => [...prev, url]);
+      alert('Additional product image uploaded successfully!');
+    } catch (error) {
+      console.warn('Firebase Storage upload failed or timed out. Falling back to base64 compression.', error);
+      try {
+        const base64Url = await compressImageToBase64(file);
+        setEditThumbnails(prev => [...prev, base64Url]);
+        alert('Additional product image processed and saved locally successfully!');
+      } catch (compressErr) {
+        console.error('Compression failed:', compressErr);
+        alert('Error processing file.');
+      }
+    } finally {
+      setEditAdditionalUploading(false);
+    }
+  };
+
+  const handleDeleteOrderSingle = async (orderId: string) => {
+    if (!confirm(`Are you sure you want to permanently delete enquiry record (ID: ${orderId})?`)) return;
+    setDeletingOrderId(orderId);
+    try {
+      if (onDeleteOrder) {
+        await onDeleteOrder(orderId);
+      }
+      setSelectedOrderIds(prev => prev.filter(id => id !== orderId));
+      alert('Enquiry record deleted successfully!');
+    } catch (error: any) {
+      console.error(error);
+      alert(`Failed to delete enquiry: ${error.message || 'Unknown error.'}`);
+    } finally {
+      setDeletingOrderId(null);
+    }
+  };
+
+  const handleToggleSelectOrder = (id: string) => {
+    setSelectedOrderIds(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllOrders = (allIds: string[]) => {
+    if (selectedOrderIds.length === allIds.length) {
+      setSelectedOrderIds([]);
+    } else {
+      setSelectedOrderIds(allIds);
+    }
+  };
+
+  const handleBulkDeleteOrders = async () => {
+    if (selectedOrderIds.length === 0) return;
+    if (!confirm(`Are you sure you want to permanently delete the ${selectedOrderIds.length} selected enquiry records?`)) return;
+    setIsBulkDeletingOrders(true);
+    let successCount = 0;
+    let failCount = 0;
+    try {
+      if (onDeleteOrder) {
+        for (const oId of selectedOrderIds) {
+          try {
+            await onDeleteOrder(oId);
+            successCount++;
+          } catch (e) {
+            failCount++;
+          }
+        }
+      }
+      setSelectedOrderIds([]);
+      if (failCount === 0) {
+        alert(`Successfully deleted ${successCount} enquiry records!`);
+      } else {
+        alert(`Deleted ${successCount} enquiries. ${failCount} could not be deleted.`);
+      }
+    } finally {
+      setIsBulkDeletingOrders(false);
+    }
+  };
 
   // Multi-select and bulk actions states
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
@@ -441,6 +551,9 @@ export default function SellerPortal({
   const handleSaveEdit = async (p: Product) => {
     setSavingEditId(p.id);
     try {
+      const finalThumbnails = editThumbnails.length > 0 ? editThumbnails : (editImg ? [editImg] : []);
+      const finalPrimaryImg = editImg || (finalThumbnails.length > 0 ? finalThumbnails[0] : p.imageUrl);
+
       await onUpdateProduct({
         ...p,
         name: editName,
@@ -451,7 +564,8 @@ export default function SellerPortal({
         description: editDesc,
         material: editMaterial,
         dimensions: editDims,
-        imageUrl: editImg,
+        imageUrl: finalPrimaryImg,
+        thumbnails: finalThumbnails,
         isBestSeller: editIsBestSeller
       });
       setEditingId(null);
@@ -491,6 +605,12 @@ export default function SellerPortal({
     setEditDims(p.dimensions || '');
     setEditImg(p.imageUrl || '');
     setEditIsBestSeller(!!p.isBestSeller);
+    setEditThumbnails(
+      Array.isArray(p.thumbnails) && p.thumbnails.length > 0
+        ? [...p.thumbnails]
+        : (p.imageUrl ? [p.imageUrl] : [])
+    );
+    setEditAddImgUrlInput('');
   };
 
   const handleToggleSelectProduct = (id: string) => {
@@ -1581,6 +1701,93 @@ export default function SellerPortal({
                                       </div>
                                     </div>
 
+                                    {/* Additional Images / Thumbnails Section */}
+                                    <div className="space-y-2 border border-espresso/10 p-3 bg-linen/10 rounded-xs">
+                                      <div className="flex items-center justify-between">
+                                        <label className="block text-[9px] uppercase tracking-wider font-bold text-espresso">
+                                          Additional Image URLs & Gallery ({editThumbnails.length})
+                                        </label>
+                                        <span className="text-[8px] text-taupe font-medium uppercase tracking-wider">Supports Ultra HD & Zoom Carousel</span>
+                                      </div>
+
+                                      {/* Render existing thumbnails */}
+                                      {editThumbnails.length > 0 && (
+                                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 p-2 bg-white border border-espresso/10 rounded-xs">
+                                          {editThumbnails.map((img, idx) => (
+                                            <div key={idx} className="relative aspect-square group border border-espresso/15 rounded-xs overflow-hidden bg-linen/20">
+                                              <img src={img} alt={`Thumb ${idx + 1}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                              <div className="absolute inset-0 bg-espresso/80 text-white flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity p-1 space-y-1">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => setEditImg(img)}
+                                                  className="w-full py-0.5 bg-terracotta hover:bg-terracotta/90 text-white text-[7px] font-bold uppercase tracking-wider rounded-xs cursor-pointer"
+                                                  title="Set as primary product photo"
+                                                >
+                                                  Set Main
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleEditRemoveAdditionalImage(idx)}
+                                                  className="w-full py-0.5 bg-rose-600 hover:bg-rose-700 text-white text-[7px] font-bold uppercase tracking-wider rounded-xs cursor-pointer"
+                                                  title="Remove image"
+                                                >
+                                                  Delete
+                                                </button>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+
+                                      {/* Add additional image by URL */}
+                                      <div className="flex space-x-1.5">
+                                        <input 
+                                          type="url" 
+                                          placeholder="Paste additional image URL..."
+                                          value={editAddImgUrlInput}
+                                          onChange={(e) => setEditAddImgUrlInput(e.target.value)}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                              e.preventDefault();
+                                              handleEditAddAdditionalUrl();
+                                            }
+                                          }}
+                                          className="flex-1 border border-espresso/20 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={handleEditAddAdditionalUrl}
+                                          className="px-3 py-2 bg-espresso hover:bg-terracotta text-[#FAF8F6] text-[9px] uppercase tracking-widest font-extrabold transition-colors cursor-pointer whitespace-nowrap"
+                                        >
+                                          Add URL
+                                        </button>
+                                      </div>
+
+                                      {/* Upload additional image file */}
+                                      <div className="bg-white border border-dashed border-espresso/20 p-2 text-center">
+                                        <input 
+                                          type="file" 
+                                          accept="image/*"
+                                          onChange={handleEditAdditionalImageUpload}
+                                          className="hidden"
+                                          id={`edit-additional-file-upload-${p.id}`}
+                                        />
+                                        <label 
+                                          htmlFor={`edit-additional-file-upload-${p.id}`}
+                                          className="inline-block px-3 py-1 bg-espresso/5 hover:bg-espresso/10 border border-espresso/15 text-[8px] uppercase tracking-wider font-bold text-espresso cursor-pointer transition-colors"
+                                        >
+                                          {editAdditionalUploading ? 'Uploading & Processing...' : 'Upload Image File'}
+                                        </label>
+                                        {editAdditionalUploading && (
+                                          <div className="mt-1 flex items-center justify-center space-x-1">
+                                            <span className="w-1.5 h-1.5 bg-terracotta rounded-full animate-bounce"></span>
+                                            <span className="w-1.5 h-1.5 bg-terracotta rounded-full animate-bounce delay-75"></span>
+                                            <span className="w-1.5 h-1.5 bg-terracotta rounded-full animate-bounce delay-150"></span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+
                                     <div>
                                       <label className="block text-[8px] uppercase tracking-wider font-semibold text-espresso mb-1">
                                         Product Description
@@ -1735,9 +1942,37 @@ export default function SellerPortal({
                   {/* ========================================== */}
                   {adminTab === 'orders' && (
                     <div className="space-y-4">
-                      <div className="border-b border-espresso/10 pb-2 flex items-center justify-between">
-                        <h4 className="font-serif text-sm font-bold text-espresso">Incoming Enquiry Curations ({orders.length})</h4>
-                        <p className="text-[10px] text-taupe">Click response status keys to update customer enquiry status instantly</p>
+                      <div className="border-b border-espresso/10 pb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center space-x-3">
+                          {orders.length > 0 && (
+                            <input 
+                              type="checkbox"
+                              checked={selectedOrderIds.length === orders.length && orders.length > 0}
+                              onChange={() => handleSelectAllOrders(orders.map(o => o.id))}
+                              className="rounded-xs border-espresso/30 text-terracotta focus:ring-terracotta cursor-pointer"
+                              title="Select All / Deselect All Enquiries"
+                            />
+                          )}
+                          <h4 className="font-serif text-sm font-bold text-espresso">Incoming Enquiry Curations ({orders.length})</h4>
+                        </div>
+
+                        <div className="flex items-center space-x-3">
+                          {selectedOrderIds.length > 0 && (
+                            <button
+                              onClick={handleBulkDeleteOrders}
+                              disabled={isBulkDeletingOrders}
+                              className="text-[10px] uppercase tracking-wider font-extrabold text-rose-600 hover:text-rose-800 bg-rose-50 px-2.5 py-1 rounded-sm border border-rose-200 flex items-center space-x-1.5 transition-colors disabled:opacity-50 cursor-pointer"
+                            >
+                              {isBulkDeletingOrders ? (
+                                <div className="w-3 h-3 border-2 border-rose-600/30 border-t-rose-600 animate-spin rounded-full" />
+                              ) : (
+                                <Trash2 className="w-3.5 h-3.5" />
+                              )}
+                              <span>Delete Selected ({selectedOrderIds.length})</span>
+                            </button>
+                          )}
+                          <p className="text-[10px] text-taupe hidden sm:block">Click response status keys to update customer enquiry status instantly</p>
+                        </div>
                       </div>
 
                       {orders.length === 0 ? (
@@ -1752,14 +1987,37 @@ export default function SellerPortal({
                               className="p-4 bg-white border border-espresso/10 rounded-sm space-y-3 hover:border-espresso/20 transition-all shadow-2xs"
                             >
                               {/* Enquiry metadata Header */}
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-espresso/5 pb-2 text-[11px]">
-                                <div>
-                                  <p className="font-bold text-espresso">Enquiry ID: {o.id}</p>
-                                  <p className="text-taupe">{o.date}</p>
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-espresso/5 pb-2 text-[11px] gap-2">
+                                <div className="flex items-center space-x-2.5">
+                                  <input 
+                                    type="checkbox"
+                                    checked={selectedOrderIds.includes(o.id)}
+                                    onChange={() => handleToggleSelectOrder(o.id)}
+                                    className="rounded-xs border-espresso/30 text-terracotta focus:ring-terracotta cursor-pointer"
+                                  />
+                                  <div>
+                                    <p className="font-bold text-espresso">Enquiry ID: {o.id}</p>
+                                    <p className="text-taupe">{o.date}</p>
+                                  </div>
                                 </div>
-                                <div className="text-right mt-1 sm:mt-0">
-                                  <p className="font-bold text-espresso">Enquiry Code: <span className="font-mono text-terracotta uppercase">{o.trackingNumber}</span></p>
-                                  <p className="text-taupe">Inquirer: <strong className="text-espresso">{o.customerName}</strong> ({o.phoneNumber})</p>
+                                <div className="flex items-center justify-between sm:justify-end space-x-3 text-right">
+                                  <div>
+                                    <p className="font-bold text-espresso">Enquiry Code: <span className="font-mono text-terracotta uppercase">{o.trackingNumber}</span></p>
+                                    <p className="text-taupe">Inquirer: <strong className="text-espresso">{o.customerName}</strong> ({o.phoneNumber})</p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    disabled={deletingOrderId === o.id}
+                                    onClick={() => handleDeleteOrderSingle(o.id)}
+                                    className="p-1.5 text-espresso/40 hover:text-rose-600 rounded-full hover:bg-rose-50 transition-all disabled:opacity-50 cursor-pointer"
+                                    title="Delete this enquiry record"
+                                  >
+                                    {deletingOrderId === o.id ? (
+                                      <div className="w-3.5 h-3.5 border-2 border-rose-600/30 border-t-rose-600 animate-spin rounded-full" />
+                                    ) : (
+                                      <Trash2 className="w-4 h-4 text-rose-500 hover:text-rose-700" />
+                                    )}
+                                  </button>
                                 </div>
                               </div>
 
@@ -1807,8 +2065,8 @@ export default function SellerPortal({
                                 </button>
                               </div>
 
-                              {/* Stepper dispatch actions */}
-                              <div className="flex items-center justify-between pt-2 border-t border-espresso/5">
+                              {/* Stepper dispatch actions and Delete Button */}
+                              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-espresso/5">
                                 <div className="flex items-center space-x-1.5">
                                   <span className="text-[10px] uppercase text-taupe font-bold">Curator Status:</span>
                                   <span className={`px-2 py-0.5 rounded-full text-[9px] uppercase tracking-wider font-extrabold ${
@@ -1822,8 +2080,8 @@ export default function SellerPortal({
                                   </span>
                                 </div>
 
-                                {/* Action keys */}
-                                <div className="flex space-x-2">
+                                {/* Action keys + Delete Action */}
+                                <div className="flex items-center space-x-2">
                                   <button 
                                     onClick={() => onUpdateOrderStatus(o.id, 'Pending')}
                                     className={`px-3 py-1 text-[9px] uppercase tracking-wider font-extrabold border ${
@@ -1853,6 +2111,21 @@ export default function SellerPortal({
                                     }`}
                                   >
                                     Set Replied
+                                  </button>
+
+                                  <button 
+                                    type="button"
+                                    disabled={deletingOrderId === o.id}
+                                    onClick={() => handleDeleteOrderSingle(o.id)}
+                                    className="px-2.5 py-1 text-[9px] uppercase tracking-wider font-extrabold border border-rose-200 text-rose-700 bg-rose-50 hover:bg-rose-100 flex items-center space-x-1 transition-colors disabled:opacity-50 cursor-pointer rounded-xs"
+                                    title="Delete Enquiry"
+                                  >
+                                    {deletingOrderId === o.id ? (
+                                      <div className="w-2.5 h-2.5 border-2 border-rose-600/30 border-t-rose-600 animate-spin rounded-full" />
+                                    ) : (
+                                      <Trash2 className="w-3 h-3 text-rose-600" />
+                                    )}
+                                    <span>Delete</span>
                                   </button>
                                 </div>
                               </div>
