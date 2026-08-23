@@ -93,7 +93,7 @@ export default function SellerPortal({
   const [newProdImg, setNewProdImg] = useState(PRESET_IMAGE_TEMPLATES[0].url);
   const [customImg, setCustomImg] = useState('');
   const [newProdStock, setNewProdStock] = useState(15);
-  const [newProdMaterial, setNewProdMaterial] = useState('18k Gold PVD Coating, Anti-Tarnish Finish');
+  const [newProdMaterial, setNewProdMaterial] = useState('');
   const [newProdDims, setNewProdDims] = useState('');
   const [isNewBadge, setIsNewBadge] = useState(true);
   const [isBestBadge, setIsBestBadge] = useState(false);
@@ -601,7 +601,12 @@ export default function SellerPortal({
     setEditStock(p.stock || 0);
     setEditCategory(p.category);
     setEditDesc(p.description || '');
-    setEditMaterial(p.material || '');
+    const mat = p.material || '';
+    setEditMaterial(
+      mat.toLowerCase().includes('18k') || mat.toLowerCase().includes('gold plated') || mat.toLowerCase().includes('pvd')
+        ? ''
+        : mat
+    );
     setEditDims(p.dimensions || '');
     setEditImg(p.imageUrl || '');
     setEditIsBestSeller(!!p.isBestSeller);
@@ -1665,14 +1670,14 @@ export default function SellerPortal({
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                       <div>
                                         <label className="block text-[8px] uppercase tracking-wider font-semibold text-espresso mb-1">
-                                          Material (e.g. 18k Gold Plated)
+                                          Material (Optional)
                                         </label>
                                         <input 
                                           type="text" 
                                           value={editMaterial}
                                           onChange={(e) => setEditMaterial(e.target.value)}
                                           className="w-full border border-espresso/20 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
-                                          placeholder="Material"
+                                          placeholder="Material (Optional)"
                                         />
                                       </div>
                                       <div>
