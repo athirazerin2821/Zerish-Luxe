@@ -244,7 +244,7 @@ export default function InstagramGallery({ posts = [] }: InstagramGalleryProps) 
                 </div>
                 
                 <p className="text-[10px] text-center text-taupe/80 leading-relaxed">
-                  Every product is vacuum-plated 316L Stainless steel. Waterproof and skin-safe under everyday conditions.
+                  Every product is coated with luxury 18k PVD gold. 100% waterproof and hypoallergenic under everyday conditions.
                 </p>
               </div>
 
