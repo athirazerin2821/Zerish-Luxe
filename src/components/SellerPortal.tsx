@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { Product, Order, Coupon, SalesAnalytics, Testimonial, UserAccount, CategorySetting, InstagramPost } from '../types';
 import { PRESET_IMAGE_TEMPLATES } from '../data';
+import { compressImageFile } from '../utils/imageOptimizer';
 
 interface SellerPortalProps {
   isOpen: boolean;
@@ -113,58 +114,12 @@ export default function SellerPortal({
   const [studioJewellery, setStudioJewellery] = useState('');
   const [studioIsSubmitting, setStudioIsSubmitting] = useState(false);
 
-  const compressImageToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (event) => {
-        const img = new Image();
-        img.src = event.target?.result as string;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 1600;
-          const MAX_HEIGHT = 1600;
-          let width = img.width;
-          let height = img.height;
-
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width;
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width *= MAX_HEIGHT / height;
-              height = MAX_HEIGHT;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            resolve(event.target?.result as string);
-            return;
-          }
-          ctx.imageSmoothingEnabled = true;
-          ctx.imageSmoothingQuality = 'high';
-          ctx.drawImage(img, 0, 0, width, height);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
-          resolve(dataUrl);
-        };
-        img.onerror = (err) => reject(err);
-      };
-      reader.onerror = (err) => reject(err);
-    });
-  };
-
   const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
     try {
       const { uploadProductImage } = await import('../services/firebaseDb');
-      // Race the Firebase Storage upload with a 3.5-second timeout
       const url = await Promise.race([
         uploadProductImage(file),
         new Promise<string>((_, reject) => 
@@ -174,14 +129,14 @@ export default function SellerPortal({
       setCustomImg(url);
       alert('Product image successfully uploaded to premium storage!');
     } catch (error) {
-      console.warn('Firebase Storage upload failed or timed out. Falling back to local high-performance base64 compression.', error);
+      console.warn('Firebase Storage upload failed or timed out. Falling back to local high-performance compression.', error);
       try {
-        const base64Url = await compressImageToBase64(file);
+        const base64Url = await compressImageFile(file);
         setCustomImg(base64Url);
-        alert('Product image processed and saved locally to catalog successfully!');
+        alert('Product image optimized and saved to catalog successfully!');
       } catch (compressErr) {
         console.error('Compression failed:', compressErr);
-        alert('Error processing file. Please verify the image file format or try another image.');
+        alert('Error processing file. Please verify the image format.');
       }
     } finally {
       setUploading(false);
@@ -197,17 +152,17 @@ export default function SellerPortal({
       const url = await Promise.race([
         uploadProductImage(file),
         new Promise<string>((_, reject) => 
-          setTimeout(() => reject(new Error('TIMEOUT')), 3.500)
+          setTimeout(() => reject(new Error('TIMEOUT')), 3500)
         )
       ]);
       setAdditionalImages(prev => [...prev, url]);
       alert('Additional product image uploaded successfully!');
     } catch (error) {
-      console.warn('Firebase Storage upload failed or timed out. Falling back to base64 compression.', error);
+      console.warn('Firebase Storage upload failed or timed out. Falling back to local compression.', error);
       try {
-        const base64Url = await compressImageToBase64(file);
+        const base64Url = await compressImageFile(file);
         setAdditionalImages(prev => [...prev, base64Url]);
-        alert('Additional product image processed and saved locally successfully!');
+        alert('Additional product image optimized and added to gallery successfully!');
       } catch (compressErr) {
         console.error('Compression failed:', compressErr);
         alert('Error processing file.');
@@ -275,9 +230,9 @@ export default function SellerPortal({
     } catch (error) {
       console.warn('Firebase Storage upload failed or timed out. Falling back to base64 compression.', error);
       try {
-        const base64Url = await compressImageToBase64(file);
+        const base64Url = await compressImageFile(file);
         setEditThumbnails(prev => [...prev, base64Url]);
-        alert('Additional product image processed and saved locally successfully!');
+        alert('Additional product image optimized and added to gallery successfully!');
       } catch (compressErr) {
         console.error('Compression failed:', compressErr);
         alert('Error processing file.');
@@ -415,11 +370,11 @@ export default function SellerPortal({
       setNewCatImg(url);
       alert('Category image uploaded successfully!');
     } catch (error) {
-      console.warn('Upload failed. Falling back to base64 compression.', error);
+      console.warn('Upload failed. Falling back to compression.', error);
       try {
-        const base64Url = await compressImageToBase64(file);
+        const base64Url = await compressImageFile(file);
         setNewCatImg(base64Url);
-        alert('Category image processed and saved successfully!');
+        alert('Category image optimized and saved successfully!');
       } catch (compressErr) {
         console.error('Compression failed:', compressErr);
         alert('Error processing file.');
@@ -456,13 +411,13 @@ export default function SellerPortal({
       setLocalCategories(updated);
       alert('Category image uploaded successfully!');
     } catch (error) {
-      console.warn('Upload failed. Falling back to base64 compression.', error);
+      console.warn('Upload failed. Falling back to compression.', error);
       try {
-        const base64Url = await compressImageToBase64(file);
+        const base64Url = await compressImageFile(file);
         const updated = [...localCategories];
         updated[idx] = { ...updated[idx], imageUrl: base64Url };
         setLocalCategories(updated);
-        alert('Category image processed and saved successfully!');
+        alert('Category image optimized and saved successfully!');
       } catch (compressErr) {
         console.error('Compression failed:', compressErr);
         alert('Error processing file.');
