@@ -162,16 +162,9 @@ export default function App() {
               return t;
             }) : [updatedImageUrl];
 
-            let material = p.material || '18k Gold PVD Coating, Anti-Tarnish Finish';
-            if (material.includes('316') || material.toLowerCase().includes('stainless steel')) {
-              material = material
-                .replace(/316L\s*Surgical\s*Stainless\s*Steel,?/gi, '')
-                .replace(/316L\s*Stainless\s*Steel,?/gi, '')
-                .replace(/Stainless\s*Steel/gi, 'Hypoallergenic Base')
-                .trim();
-              if (!material || material === ',') {
-                material = '18k Gold PVD Coating, Anti-Tarnish Finish';
-              }
+            let material = p.material || '';
+            if (material.toLowerCase().includes('18k') || material.toLowerCase().includes('gold plated') || material.toLowerCase().includes('pvd')) {
+              material = '';
             }
 
             return {
@@ -369,7 +362,15 @@ export default function App() {
     seedDatabaseIfEmpty().then(() => {
       getProducts().then((prods) => {
         if (Array.isArray(prods)) {
-          const validProds = prods.filter((p: any) => p && typeof p === 'object' && p.id && p.name);
+          const validProds = prods
+            .filter((p: any) => p && typeof p === 'object' && p.id && p.name)
+            .map((p: any) => {
+              let mat = p.material || '';
+              if (mat.toLowerCase().includes('18k') || mat.toLowerCase().includes('gold plated') || mat.toLowerCase().includes('pvd')) {
+                mat = '';
+              }
+              return { ...p, material: mat };
+            });
           setProducts(validProds);
         }
       }).catch(err => console.error('Firestore getProducts error:', err));
@@ -1723,10 +1724,12 @@ export default function App() {
                           {p.name}
                         </h4>
                         
-                        {/* Material label */}
-                        <p className="text-[9px] text-taupe uppercase font-semibold">
-                          {p.material || '18k Gold PVD Coating • Anti-Tarnish'}
-                        </p>
+                        {/* Material label - only shown if specified and not empty */}
+                        {p.material && p.material.trim().length > 0 && (
+                          <p className="text-[9px] text-taupe uppercase font-semibold">
+                            {p.material}
+                          </p>
+                        )}
                       </div>
 
                       {/* Rating details & Price row */}
