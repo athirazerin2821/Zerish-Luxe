@@ -216,6 +216,10 @@ export async function toggleOrderPaymentStatus(orderId: string): Promise<void> {
   }
 }
 
+export async function deleteOrder(orderId: string): Promise<void> {
+  await deleteDoc(doc(db, 'orders', orderId));
+}
+
 // Coupons API
 export async function getCoupons(): Promise<Coupon[]> {
   const querySnapshot = await getDocs(collection(db, 'coupons'));
