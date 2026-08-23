@@ -39,8 +39,8 @@ export default function WhyChooseUs() {
   const pillars = [
     {
       icon: <Shield className="w-5 h-5" />,
-      title: "316 Stainless Steel",
-      description: "Crafted using premium surgical-grade steel, highly resilient and completely hypoallergenic."
+      title: "Hypoallergenic Metals",
+      description: "Crafted using premium skin-safe metals, highly resilient, nickel-free and completely hypoallergenic."
     },
     {
       icon: <Sparkles className="w-5 h-5" />,
