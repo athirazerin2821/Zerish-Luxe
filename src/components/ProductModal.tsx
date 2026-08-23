@@ -1,23 +1,19 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   X, 
   ShoppingBag, 
-  Star, 
-  CheckCircle, 
   ShieldCheck, 
   Sparkles, 
   Droplets, 
-  ChevronDown, 
-  RotateCw, 
-  HelpCircle,
-  Award,
-  Truck,
-  Heart,
-  ZoomIn,
-  ZoomOut,
-  Maximize2,
-  ChevronLeft,
-  ChevronRight
+  Truck, 
+  Heart, 
+  ZoomIn, 
+  ZoomOut, 
+  Maximize2, 
+  ChevronLeft, 
+  ChevronRight,
+  RotateCcw,
+  Award
 } from 'lucide-react';
 import { Product } from '../types';
 
@@ -28,6 +24,32 @@ interface ProductModalProps {
   products: Product[]; // for Related & Bundle lookup
   wishlist: string[];
   onToggleWishlist: (id: string) => void;
+}
+
+// Helper to ensure ultra-clear crisp high-resolution images when viewing & zooming
+export function getHighResolutionImageUrl(url: string, targetWidth = 2400): string {
+  if (!url) return url;
+  if (url.includes('images.unsplash.com')) {
+    let highRes = url;
+    if (/[?&]w=\d+/.test(highRes)) {
+      highRes = highRes.replace(/([?&])w=\d+/, `$1w=${targetWidth}`);
+    } else {
+      highRes += `${highRes.includes('?') ? '&' : '?'}w=${targetWidth}`;
+    }
+    if (/[?&]q=\d+/.test(highRes)) {
+      highRes = highRes.replace(/([?&])q=\d+/, '$1q=95');
+    } else {
+      highRes += '&q=95';
+    }
+    if (!highRes.includes('auto=format')) {
+      highRes += '&auto=format';
+    }
+    if (!highRes.includes('fit=crop')) {
+      highRes += '&fit=crop';
+    }
+    return highRes;
+  }
+  return url;
 }
 
 export default function ProductModal({ 
@@ -43,6 +65,16 @@ export default function ProductModal({
     ? product.thumbnails 
     : [product.imageUrl];
   const [activeImgIdx, setActiveImgIdx] = useState(0);
+
+  // Preload high-resolution versions into browser cache for instant crispness
+  useEffect(() => {
+    imageList.forEach(url => {
+      if (url) {
+        const img = new Image();
+        img.src = getHighResolutionImageUrl(url, 2400);
+      }
+    });
+  }, [imageList]);
 
   // Fullscreen Lightbox state
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
@@ -93,8 +125,8 @@ export default function ProductModal({
     const newX = clientX - lightboxPanStart.current.x;
     const newY = clientY - lightboxPanStart.current.y;
     
-    const maxBoundX = (lightboxZoomScale - 1) * 300;
-    const maxBoundY = (lightboxZoomScale - 1) * 300;
+    const maxBoundX = (lightboxZoomScale - 1) * 350;
+    const maxBoundY = (lightboxZoomScale - 1) * 350;
     
     setLightboxPanOffset({
       x: Math.max(-maxBoundX, Math.min(maxBoundX, newX)),
@@ -128,7 +160,7 @@ export default function ProductModal({
   };
 
   // Keyboard listeners for Lightbox Navigation
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isLightboxOpen) return;
     
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -147,7 +179,7 @@ export default function ProductModal({
     };
   }, [isLightboxOpen, lightboxImgIdx]);
 
-  // Unified Zoom State
+  // Main Card Zoom State
   const [zoomScale, setZoomScale] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const isPanning = useRef(false);
@@ -195,8 +227,8 @@ export default function ProductModal({
     const newY = clientY - panStart.current.y;
     
     // Bounds restriction based on zoom level to prevent dragging too far off-screen
-    const maxBoundX = (zoomScale - 1) * 200;
-    const maxBoundY = (zoomScale - 1) * 200;
+    const maxBoundX = (zoomScale - 1) * 220;
+    const maxBoundY = (zoomScale - 1) * 220;
     
     setPanOffset({
       x: Math.max(-maxBoundX, Math.min(maxBoundX, newX)),
@@ -208,13 +240,18 @@ export default function ProductModal({
     isPanning.current = false;
   };
 
-  // Accordion details
-  const [activeSection, setActiveSection] = useState<'care' | 'shipping'>('care');
-
-  // Find related products (same category, excluding current)
-  const related = products
-    .filter(p => p.category === product.category && p.id !== product.id)
-    .slice(0, 3);
+  // Mouse wheel zoom over the image container
+  const handleWheelZoom = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (e.deltaY < 0) {
+      setZoomScale(prev => Math.min(prev + 0.3, 4));
+    } else if (e.deltaY > 0) {
+      setZoomScale(prev => {
+        const next = Math.max(prev - 0.3, 1);
+        if (next === 1) setPanOffset({ x: 0, y: 0 });
+        return next;
+      });
+    }
+  };
 
   // Frequently Bought Together Bundle (Find 1 item from another category)
   const bundleItem = products.find(p => p.category !== product.category && p.stock && p.stock > 0);
@@ -227,27 +264,6 @@ export default function ProductModal({
     setBundleAdded(true);
     setTimeout(() => setBundleAdded(false), 2000);
   };
-
-  // Mock Reviews based on South India Names
-  const mockReviews = [
-    {
-      name: 'Anjali Nair',
-      city: 'Kochi',
-      rating: 5,
-      date: 'Jul 4, 2026',
-      text: "The finish is exceptional. Truly anti-tarnish as described, I wear it during my humid travels through Kerala and it hasn't faded a bit!"
-    },
-    {
-      name: 'Keerthana S',
-      city: 'Chennai',
-      rating: 5,
-      date: 'Jun 28, 2026',
-      text: "Perfect weight, looks incredibly gold and doesn't cause any skin allergies. Ideal for long office hours in Chennai."
-    }
-  ];
-
-  const averageRating = product.rating || 4.8;
-  const reviewsCount = product.reviewsCount || 24;
 
   const inWishlist = wishlist.includes(product.id);
 
@@ -275,7 +291,10 @@ export default function ProductModal({
         <div className="lg:col-span-5 space-y-4">
           
           {/* Main Visual Frame */}
-          <div className="relative aspect-square bg-[#FAF8F6] border border-espresso/10 overflow-hidden rounded-sm select-none">
+          <div 
+            onWheel={handleWheelZoom}
+            className="relative aspect-square bg-[#FAF8F6] border border-espresso/10 overflow-hidden rounded-sm select-none"
+          >
             {/* Interactive Zoom and Pan Board */}
             <div 
               onClick={() => {
@@ -295,22 +314,27 @@ export default function ProductModal({
               className="relative w-full h-full overflow-hidden flex items-center justify-center group/img"
               style={{ cursor: zoomScale > 1 ? 'grab' : 'zoom-in' }}
             >
+              {/* High-Resolution Primary Image */}
               <img 
-                src={imageList[activeImgIdx]} 
+                src={getHighResolutionImageUrl(imageList[activeImgIdx], 2400)} 
                 alt={product.name} 
-                className="w-full h-full object-cover rounded-sm pointer-events-none transition-transform duration-200"
+                className="w-full h-full object-cover rounded-sm pointer-events-none"
                 style={{
-                  transform: `scale(${zoomScale}) translate(${panOffset.x / zoomScale}px, ${panOffset.y / zoomScale}px)`,
+                  transform: `translate3d(${panOffset.x}px, ${panOffset.y}px, 0) scale(${zoomScale})`,
                   transformOrigin: 'center center',
-                  transition: isPanning.current ? 'none' : 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
+                  transition: isPanning.current ? 'none' : 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+                  imageRendering: 'auto',
+                  backfaceVisibility: 'hidden',
+                  WebkitBackfaceVisibility: 'hidden',
+                  willChange: zoomScale > 1 ? 'transform' : 'auto'
                 }}
                 referrerPolicy="no-referrer"
               />
 
               {zoomScale > 1 && (
                 <div className="absolute inset-x-0 bottom-14 text-center pointer-events-none z-10">
-                  <span className="bg-espresso/80 text-[#FAF8F6] text-[8px] uppercase tracking-widest font-extrabold px-2.5 py-1 rounded-full backdrop-blur-xs shadow-xs animate-pulse">
-                    Drag or swipe to pan
+                  <span className="bg-espresso/85 text-[#FAF8F6] text-[8px] uppercase tracking-widest font-extrabold px-3 py-1 rounded-full backdrop-blur-xs shadow-md animate-pulse">
+                    Drag or swipe to explore details
                   </span>
                 </div>
               )}
@@ -318,9 +342,9 @@ export default function ProductModal({
               {/* Hover prompt overlay when not zoomed */}
               {zoomScale === 1 && (
                 <div className="absolute inset-0 bg-espresso/5 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-                  <span className="bg-espresso/80 text-white text-[10px] uppercase tracking-widest font-bold px-3 py-2 rounded-xs flex items-center gap-1.5 shadow-md">
+                  <span className="bg-espresso/85 text-white text-[10px] uppercase tracking-widest font-bold px-3 py-2 rounded-xs flex items-center gap-1.5 shadow-md">
                     <Maximize2 className="w-3.5 h-3.5" />
-                    Click to View Clearly
+                    Click for Ultra HD Fullscreen
                   </span>
                 </div>
               )}
@@ -341,7 +365,7 @@ export default function ProductModal({
             </div>
 
             {/* Float Zoom Controls */}
-            <div className="absolute bottom-3 left-3 flex items-center space-x-1 z-10 bg-white/90 backdrop-blur-xs border border-espresso/10 p-1 rounded-sm shadow-xs">
+            <div className="absolute bottom-3 left-3 flex items-center space-x-1 z-10 bg-white/95 backdrop-blur-xs border border-espresso/15 p-1 rounded-sm shadow-md">
               <button
                 type="button"
                 onClick={(e) => {
@@ -354,7 +378,7 @@ export default function ProductModal({
               >
                 <ZoomOut className="w-4 h-4" />
               </button>
-              <span className="text-[9px] font-mono font-bold text-espresso px-1">
+              <span className="text-[9px] font-mono font-bold text-espresso px-1 min-w-[32px] text-center">
                 {Math.round(zoomScale * 100)}%
               </span>
               <button
@@ -376,8 +400,10 @@ export default function ProductModal({
                     e.stopPropagation();
                     handleZoomReset();
                   }}
-                  className="p-1 text-[8px] uppercase tracking-wider font-extrabold text-terracotta hover:bg-espresso hover:text-white px-1.5 py-0.5 rounded-xs transition-all ml-1 cursor-pointer"
+                  className="p-1 text-[8px] uppercase tracking-wider font-extrabold text-terracotta hover:bg-espresso hover:text-white px-1.5 py-0.5 rounded-xs transition-all ml-0.5 cursor-pointer flex items-center gap-0.5"
+                  title="Reset Zoom"
                 >
+                  <RotateCcw className="w-2.5 h-2.5" />
                   Reset
                 </button>
               )}
@@ -390,7 +416,7 @@ export default function ProductModal({
                 setIsLightboxOpen(true);
                 setLightboxImgIdx(activeImgIdx);
               }}
-              className="absolute bottom-3 right-3 z-10 bg-white/90 hover:bg-espresso hover:text-[#FAF8F6] text-espresso border border-espresso/10 px-2.5 py-1.5 rounded-sm shadow-xs flex items-center space-x-1.5 transition-all text-[9px] uppercase tracking-wider font-extrabold cursor-pointer"
+              className="absolute bottom-3 right-3 z-10 bg-white/95 hover:bg-espresso hover:text-[#FAF8F6] text-espresso border border-espresso/15 px-2.5 py-1.5 rounded-sm shadow-md flex items-center space-x-1.5 transition-all text-[9px] uppercase tracking-wider font-extrabold cursor-pointer"
               title="Open Fullscreen View"
             >
               <Maximize2 className="w-3.5 h-3.5 animate-pulse" />
@@ -425,12 +451,17 @@ export default function ProductModal({
                     : 'border-espresso/15 hover:opacity-100 opacity-70'
                 }`}
               >
-                <img src={url} alt={`Thumb ${index + 1}`} className="w-full h-full object-cover" />
+                <img 
+                  src={getHighResolutionImageUrl(url, 400)} 
+                  alt={`${product.name} thumbnail ${index + 1}`} 
+                  className="w-full h-full object-cover" 
+                  referrerPolicy="no-referrer"
+                />
               </button>
             ))}
           </div>
 
-          {/* Feature icons */}
+          {/* Feature Badges */}
           <div className="grid grid-cols-3 gap-2 pt-2 border-t border-espresso/10 text-center">
             <div className="bg-linen/20 p-2 border border-espresso/5 rounded-xs flex flex-col items-center">
               <ShieldCheck className="w-4 h-4 text-terracotta mb-0.5" />
@@ -490,7 +521,7 @@ export default function ProductModal({
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3 min-w-0">
                   <div className="w-10 h-10 bg-linen border border-espresso/5 rounded-sm overflow-hidden flex-shrink-0">
-                    <img src={bundleItem.imageUrl} alt={bundleItem.name} className="w-full h-full object-cover" />
+                    <img src={getHighResolutionImageUrl(bundleItem.imageUrl, 300)} alt={bundleItem.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   </div>
                   <div className="min-w-0">
                     <p className="text-[9px] uppercase tracking-wider text-taupe">Add matching piece</p>
@@ -537,50 +568,16 @@ export default function ProductModal({
             </button>
           </div>
 
-          {/* Secondary Details Collapsible / Accordions */}
-          <div className="border-t border-espresso/15 pt-4 space-y-2">
-            {/* Tabs Headers */}
-            <div className="flex border-b border-espresso/15 text-[10px] uppercase font-bold tracking-widest text-taupe">
-              {(['care', 'shipping'] as const).map(tab => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveSection(tab)}
-                  className={`flex-1 py-2 text-center border-b-2 transition-all ${
-                    activeSection === tab 
-                      ? 'border-terracotta text-espresso font-extrabold' 
-                      : 'border-transparent hover:text-espresso'
-                  }`}
-                >
-                  {tab}
-                </button>
-              ))}
-            </div>
-
-            {/* Accordion panel content */}
-            <div className="py-2.5 min-h-[90px] text-xs leading-relaxed text-espresso/75">
-              {activeSection === 'care' && (
-                <div className="space-y-1.5">
-                  <p>Our jewelry is engineered for maximum life, but a little care keeps it glowing forever:</p>
-                  <ul className="list-disc pl-4 space-y-1">
-                    <li>Rinse with lukewarm fresh water after swimming in pool chlorine or sea salt.</li>
-                    <li>Wipe clean using the provided microfiber buffer flannel.</li>
-                    <li>Store inside the airtight pouch when not in wear.</li>
-                    <li>Avoid spraying direct concentrated perfumes/colognes directly onto metallic joints.</li>
-                  </ul>
-                </div>
-              )}
-
-              {activeSection === 'shipping' && (
-                <div className="space-y-2 flex items-start space-x-3 bg-linen/25 p-3 border border-espresso/5 rounded-xs">
-                  <Truck className="w-5 h-5 text-terracotta flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-semibold text-espresso">Express Dispatches & Tracking</p>
-                    <p className="text-[11px] text-espresso/85 mt-0.5">
-                      All collections are dispatched within 12 hours from our dedicated Kochi and Chennai hubs. Secure Blue Dart tracking numbers are shared instantly via SMS/Email. Free shipping on all pan-India orders above ₹1,500.
-                    </p>
-                  </div>
-                </div>
-              )}
+          {/* Clean Shipping & Delivery Information Banner (Care Tips section completely removed) */}
+          <div className="border-t border-espresso/15 pt-3">
+            <div className="flex items-start space-x-3 bg-linen/25 p-3 border border-espresso/5 rounded-xs">
+              <Truck className="w-5 h-5 text-terracotta flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-espresso text-xs">Express Dispatches & Live Courier Tracking</p>
+                <p className="text-[11px] text-espresso/80 mt-0.5 leading-relaxed">
+                  All orders are packaged in protective velvet pouches and dispatched within 12 hours from our dedicated fulfillment hubs. Real-time tracking numbers are shared immediately. Free shipping on orders above ₹1,500.
+                </p>
+              </div>
             </div>
           </div>
 
@@ -589,7 +586,7 @@ export default function ProductModal({
       </div>
     </div>
 
-    {/* FULLSCREEN LIGHTBOX MODAL */}
+    {/* FULLSCREEN LIGHTBOX MODAL WITH ULTRA HD RENDERING */}
     {isLightboxOpen && (
       <div className="fixed inset-0 z-[100] bg-espresso/95 backdrop-blur-md flex flex-col justify-between p-4 sm:p-6 select-none animate-in fade-in duration-200">
         {/* Header Controls */}
@@ -599,7 +596,7 @@ export default function ProductModal({
               {product.name}
             </span>
             <span className="text-[10px] text-[#FAF8F6]/60 block tracking-wider font-mono uppercase">
-              Image {lightboxImgIdx + 1} of {imageList.length}
+              Image {lightboxImgIdx + 1} of {imageList.length} • Ultra HD 2400px
             </span>
           </div>
           
@@ -627,6 +624,16 @@ export default function ProductModal({
               >
                 <ZoomIn className="w-4 h-4" />
               </button>
+              {lightboxZoomScale > 1 && (
+                <button
+                  type="button"
+                  onClick={handleLightboxZoomReset}
+                  className="p-1 text-[9px] uppercase font-bold text-terracotta hover:text-white px-1.5 transition-colors cursor-pointer"
+                  title="Reset Zoom"
+                >
+                  Reset
+                </button>
+              )}
             </div>
 
             {/* Close Button */}
@@ -663,17 +670,21 @@ export default function ProductModal({
             onTouchMove={handleLightboxPanMove}
             onTouchEnd={handleLightboxPanEnd}
             onDoubleClick={() => lightboxZoomScale > 1 ? handleLightboxZoomReset() : setLightboxZoomScale(2.5)}
-            className="relative w-full h-full max-w-3xl max-h-[75vh] flex items-center justify-center overflow-hidden"
+            className="relative w-full h-full max-w-4xl max-h-[75vh] flex items-center justify-center overflow-hidden"
             style={{ cursor: lightboxZoomScale > 1 ? 'grab' : 'zoom-in' }}
           >
             <img 
-              src={imageList[lightboxImgIdx]} 
+              src={getHighResolutionImageUrl(imageList[lightboxImgIdx], 2400)} 
               alt={`${product.name} large view`} 
-              className="max-w-full max-h-full object-contain pointer-events-none transition-transform duration-200"
+              className="max-w-full max-h-full object-contain pointer-events-none"
               style={{
-                transform: `scale(${lightboxZoomScale}) translate(${lightboxPanOffset.x / lightboxZoomScale}px, ${lightboxPanOffset.y / lightboxZoomScale}px)`,
+                transform: `translate3d(${lightboxPanOffset.x}px, ${lightboxPanOffset.y}px, 0) scale(${lightboxZoomScale})`,
                 transformOrigin: 'center center',
-                transition: isLightboxPanning.current ? 'none' : 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
+                transition: isLightboxPanning.current ? 'none' : 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+                imageRendering: 'auto',
+                backfaceVisibility: 'hidden',
+                WebkitBackfaceVisibility: 'hidden',
+                willChange: 'transform'
               }}
               referrerPolicy="no-referrer"
             />
@@ -708,16 +719,21 @@ export default function ProductModal({
                       : 'border-white/20 hover:border-white/50 opacity-60 hover:opacity-100'
                   }`}
                 >
-                  <img src={url} alt={`Thumb ${index + 1}`} className="w-full h-full object-cover" />
+                  <img 
+                    src={getHighResolutionImageUrl(url, 400)} 
+                    alt={`Thumb ${index + 1}`} 
+                    className="w-full h-full object-cover" 
+                    referrerPolicy="no-referrer"
+                  />
                 </button>
               ))}
             </div>
           )}
           
-          <div className="text-[10px] text-[#FAF8F6]/40 uppercase tracking-widest font-semibold flex items-center space-x-2">
-            <span>Double-click to Zoom/Reset</span>
+          <div className="text-[10px] text-[#FAF8F6]/50 uppercase tracking-widest font-semibold flex items-center space-x-2">
+            <span>Scroll Wheel or Double-click to Zoom</span>
             <span>•</span>
-            <span>Pinch or Drag to Pan</span>
+            <span>Drag or Swipe to Pan</span>
           </div>
         </div>
       </div>
