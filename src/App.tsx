@@ -48,6 +48,7 @@ import {
   deleteProduct, 
   updateProduct, 
   createOrder, 
+  deleteOrder,
   deleteReview, 
   addReview, 
   updateHeroText as updateHeroTextInDb, 
@@ -139,8 +140,47 @@ export default function App() {
     if (!saved) return INITIAL_PRODUCTS;
     try {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed)) {
-        return parsed.filter((p: any) => p && typeof p === 'object' && p.id && p.name);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed
+          .filter((p: any) => p && typeof p === 'object' && p.id && p.name)
+          .map((p: any) => {
+            let updatedImageUrl = p.imageUrl;
+            if (updatedImageUrl && updatedImageUrl.includes('images.unsplash.com')) {
+              updatedImageUrl = updatedImageUrl.replace(/([?&])w=\d+/, '$1w=2400').replace(/([?&])q=\d+/, '$1q=95');
+              if (!updatedImageUrl.includes('w=2400')) {
+                updatedImageUrl += `${updatedImageUrl.includes('?') ? '&' : '?'}w=2400&q=95&auto=format&fit=crop`;
+              }
+            }
+            let updatedThumbs = Array.isArray(p.thumbnails) ? p.thumbnails.map((t: string) => {
+              if (t && t.includes('images.unsplash.com')) {
+                let ht = t.replace(/([?&])w=\d+/, '$1w=2400').replace(/([?&])q=\d+/, '$1q=95');
+                if (!ht.includes('w=2400')) {
+                  ht += `${ht.includes('?') ? '&' : '?'}w=2400&q=95&auto=format&fit=crop`;
+                }
+                return ht;
+              }
+              return t;
+            }) : [updatedImageUrl];
+
+            let material = p.material || '18k Gold PVD Coating, Anti-Tarnish Finish';
+            if (material.includes('316') || material.toLowerCase().includes('stainless steel')) {
+              material = material
+                .replace(/316L\s*Surgical\s*Stainless\s*Steel,?/gi, '')
+                .replace(/316L\s*Stainless\s*Steel,?/gi, '')
+                .replace(/Stainless\s*Steel/gi, 'Hypoallergenic Base')
+                .trim();
+              if (!material || material === ',') {
+                material = '18k Gold PVD Coating, Anti-Tarnish Finish';
+              }
+            }
+
+            return {
+              ...p,
+              imageUrl: updatedImageUrl,
+              thumbnails: updatedThumbs,
+              material
+            };
+          });
       }
       return INITIAL_PRODUCTS;
     } catch (e) {
@@ -838,6 +878,18 @@ export default function App() {
     updateOrderStatus(orderId, status).catch(err => console.error('Error updating order status in Firestore:', err));
   };
 
+  const handleDeleteOrder = async (orderId: string): Promise<void> => {
+    try {
+      await deleteOrder(orderId);
+      setOrders(prev => prev.filter(o => o.id !== orderId));
+    } catch (err: any) {
+      console.error('Error deleting enquiry from Firestore:', err);
+      // Still remove locally to maintain responsiveness
+      setOrders(prev => prev.filter(o => o.id !== orderId));
+      throw err;
+    }
+  };
+
   const handleTogglePaymentStatus = (orderId: string) => {
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, isPaid: !o.isPaid } : o));
 
@@ -1109,6 +1161,7 @@ export default function App() {
         orders={orders}
         customers={customers}
         onUpdateOrderStatus={handleUpdateOrderStatus}
+        onDeleteOrder={handleDeleteOrder}
         onTogglePaymentStatus={handleTogglePaymentStatus}
         coupons={coupons}
         onAddCoupon={handleAddCoupon}
@@ -1672,7 +1725,7 @@ export default function App() {
                         
                         {/* Material label */}
                         <p className="text-[9px] text-taupe uppercase font-semibold">
-                          {p.material || '316L Stainless Steel • 18k PVD'}
+                          {p.material || '18k Gold PVD Coating • Anti-Tarnish'}
                         </p>
                       </div>
 
