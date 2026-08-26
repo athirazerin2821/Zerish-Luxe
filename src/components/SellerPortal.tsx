@@ -123,17 +123,17 @@ export default function SellerPortal({
       const url = await Promise.race([
         uploadProductImage(file),
         new Promise<string>((_, reject) => 
-          setTimeout(() => reject(new Error('TIMEOUT')), 3500)
+          setTimeout(() => reject(new Error('TIMEOUT')), 15000)
         )
       ]);
       setCustomImg(url);
-      alert('Product image successfully uploaded to premium storage!');
+      alert('Product image uploaded in Ultra HD successfully!');
     } catch (error) {
-      console.warn('Firebase Storage upload failed or timed out. Falling back to local high-performance compression.', error);
+      console.warn('Firebase Storage upload failed or timed out. Falling back to Ultra HD local processing.', error);
       try {
         const base64Url = await compressImageFile(file);
         setCustomImg(base64Url);
-        alert('Product image optimized and saved to catalog successfully!');
+        alert('Product image optimized in Ultra HD and saved to catalog successfully!');
       } catch (compressErr) {
         console.error('Compression failed:', compressErr);
         alert('Error processing file. Please verify the image format.');
@@ -152,17 +152,17 @@ export default function SellerPortal({
       const url = await Promise.race([
         uploadProductImage(file),
         new Promise<string>((_, reject) => 
-          setTimeout(() => reject(new Error('TIMEOUT')), 3500)
+          setTimeout(() => reject(new Error('TIMEOUT')), 15000)
         )
       ]);
       setAdditionalImages(prev => [...prev, url]);
-      alert('Additional product image uploaded successfully!');
+      alert('Additional product image uploaded in Ultra HD successfully!');
     } catch (error) {
-      console.warn('Firebase Storage upload failed or timed out. Falling back to local compression.', error);
+      console.warn('Firebase Storage upload failed or timed out. Falling back to Ultra HD local processing.', error);
       try {
         const base64Url = await compressImageFile(file);
         setAdditionalImages(prev => [...prev, base64Url]);
-        alert('Additional product image optimized and added to gallery successfully!');
+        alert('Additional product image optimized in Ultra HD and added to gallery successfully!');
       } catch (compressErr) {
         console.error('Compression failed:', compressErr);
         alert('Error processing file.');
@@ -193,10 +193,40 @@ export default function SellerPortal({
   const [editMaterial, setEditMaterial] = useState('');
   const [editDims, setEditDims] = useState('');
   const [editImg, setEditImg] = useState('');
+  const [editPrimaryUploading, setEditPrimaryUploading] = useState(false);
   const [editIsBestSeller, setEditIsBestSeller] = useState(false);
   const [editThumbnails, setEditThumbnails] = useState<string[]>([]);
   const [editAddImgUrlInput, setEditAddImgUrlInput] = useState('');
   const [editAdditionalUploading, setEditAdditionalUploading] = useState(false);
+
+  const handleEditPrimaryImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setEditPrimaryUploading(true);
+    try {
+      const { uploadProductImage } = await import('../services/firebaseDb');
+      const url = await Promise.race([
+        uploadProductImage(file),
+        new Promise<string>((_, reject) => 
+          setTimeout(() => reject(new Error('TIMEOUT')), 15000)
+        )
+      ]);
+      setEditImg(url);
+      alert('Primary product image uploaded in Ultra HD successfully!');
+    } catch (error) {
+      console.warn('Firebase Storage upload failed or timed out. Falling back to Ultra HD local processing.', error);
+      try {
+        const base64Url = await compressImageFile(file);
+        setEditImg(base64Url);
+        alert('Primary product image optimized in Ultra HD and saved successfully!');
+      } catch (compressErr) {
+        console.error('Compression failed:', compressErr);
+        alert('Error processing file. Please check file format.');
+      }
+    } finally {
+      setEditPrimaryUploading(false);
+    }
+  };
 
   // Enquiries deletion and selection state
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
@@ -222,17 +252,17 @@ export default function SellerPortal({
       const url = await Promise.race([
         uploadProductImage(file),
         new Promise<string>((_, reject) => 
-          setTimeout(() => reject(new Error('TIMEOUT')), 3500)
+          setTimeout(() => reject(new Error('TIMEOUT')), 15000)
         )
       ]);
       setEditThumbnails(prev => [...prev, url]);
-      alert('Additional product image uploaded successfully!');
+      alert('Additional product image uploaded in Ultra HD successfully!');
     } catch (error) {
-      console.warn('Firebase Storage upload failed or timed out. Falling back to base64 compression.', error);
+      console.warn('Firebase Storage upload failed or timed out. Falling back to Ultra HD local processing.', error);
       try {
         const base64Url = await compressImageFile(file);
         setEditThumbnails(prev => [...prev, base64Url]);
-        alert('Additional product image optimized and added to gallery successfully!');
+        alert('Additional product image optimized in Ultra HD and added to gallery successfully!');
       } catch (compressErr) {
         console.error('Compression failed:', compressErr);
         alert('Error processing file.');
@@ -364,17 +394,17 @@ export default function SellerPortal({
       const url = await Promise.race([
         uploadProductImage(file),
         new Promise<string>((_, reject) => 
-          setTimeout(() => reject(new Error('TIMEOUT')), 3500)
+          setTimeout(() => reject(new Error('TIMEOUT')), 15000)
         )
       ]);
       setNewCatImg(url);
-      alert('Category image uploaded successfully!');
+      alert('Category image uploaded in Ultra HD successfully!');
     } catch (error) {
-      console.warn('Upload failed. Falling back to compression.', error);
+      console.warn('Upload failed. Falling back to Ultra HD compression.', error);
       try {
         const base64Url = await compressImageFile(file);
         setNewCatImg(base64Url);
-        alert('Category image optimized and saved successfully!');
+        alert('Category image optimized in Ultra HD and saved successfully!');
       } catch (compressErr) {
         console.error('Compression failed:', compressErr);
         alert('Error processing file.');
@@ -403,21 +433,21 @@ export default function SellerPortal({
       const url = await Promise.race([
         uploadProductImage(file),
         new Promise<string>((_, reject) => 
-          setTimeout(() => reject(new Error('TIMEOUT')), 3500)
+          setTimeout(() => reject(new Error('TIMEOUT')), 15000)
         )
       ]);
       const updated = [...localCategories];
       updated[idx] = { ...updated[idx], imageUrl: url };
       setLocalCategories(updated);
-      alert('Category image uploaded successfully!');
+      alert('Category image uploaded in Ultra HD successfully!');
     } catch (error) {
-      console.warn('Upload failed. Falling back to compression.', error);
+      console.warn('Upload failed. Falling back to Ultra HD compression.', error);
       try {
         const base64Url = await compressImageFile(file);
         const updated = [...localCategories];
         updated[idx] = { ...updated[idx], imageUrl: base64Url };
         setLocalCategories(updated);
-        alert('Category image optimized and saved successfully!');
+        alert('Category image optimized in Ultra HD and saved successfully!');
       } catch (compressErr) {
         console.error('Compression failed:', compressErr);
         alert('Error processing file.');
@@ -1351,15 +1381,18 @@ export default function SellerPortal({
                             
                             <input 
                               type="url" 
-                              placeholder="Or paste any custom Unsplash image URL..."
+                              placeholder="Paste direct image URL (Unsplash, ImgBB, Cloudinary, Imgur, etc.)..."
                               value={customImg}
                               onChange={(e) => setCustomImg(e.target.value)}
                               className="w-full border border-espresso/20 p-2 text-[11px] text-espresso bg-white focus:border-terracotta focus:outline-hidden mt-1.5"
                             />
+                            <p className="text-[8px] text-taupe mt-1">
+                              💡 <strong>Pro Tip for 100% 4K Crystal Clarity:</strong> Paste direct image links or upload high-res images to preserve maximum detail, luster, and sharpness.
+                            </p>
 
                             <div className="mt-2 bg-white border border-dashed border-espresso/20 p-2.5 text-center">
                               <label className="block text-[8px] uppercase tracking-wider font-extrabold text-espresso mb-1">
-                                Or Upload Image File to Firebase Storage
+                                Or Upload Image File (2048px Ultra-HD Processing)
                               </label>
                               <input 
                                 type="file" 
@@ -1648,15 +1681,30 @@ export default function SellerPortal({
                                         />
                                       </div>
                                       <div>
-                                        <label className="block text-[8px] uppercase tracking-wider font-semibold text-espresso mb-1">
-                                          Image URL
-                                        </label>
+                                        <div className="flex items-center justify-between mb-1">
+                                          <label className="block text-[8px] uppercase tracking-wider font-semibold text-espresso">
+                                            Main Image
+                                          </label>
+                                          <label 
+                                            htmlFor={`edit-main-file-upload-${p.id}`}
+                                            className="text-[8px] uppercase tracking-wider font-bold text-terracotta hover:underline cursor-pointer"
+                                          >
+                                            {editPrimaryUploading ? 'Uploading...' : '📁 Upload New File'}
+                                          </label>
+                                          <input 
+                                            type="file" 
+                                            accept="image/*"
+                                            onChange={handleEditPrimaryImageUpload}
+                                            className="hidden"
+                                            id={`edit-main-file-upload-${p.id}`}
+                                          />
+                                        </div>
                                         <input 
                                           type="text" 
                                           value={editImg}
                                           onChange={(e) => setEditImg(e.target.value)}
                                           className="w-full border border-espresso/20 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
-                                          placeholder="Image URL"
+                                          placeholder="Image URL or upload file"
                                         />
                                       </div>
                                     </div>
