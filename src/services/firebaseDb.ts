@@ -10,8 +10,9 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
-import { Product, Order, Coupon, Testimonial, UserAccount, CategorySetting, InstagramPost } from '../types';
-import { INITIAL_PRODUCTS, TESTIMONIALS } from '../data';
+import { Product, Order, Coupon, Testimonial, UserAccount, CategorySetting, InstagramPost, HeroSlide, HeroCarouselSettings } from '../types';
+import { INITIAL_PRODUCTS, TESTIMONIALS, DEFAULT_HERO_SLIDES } from '../data';
+import { optimizeDataUrl } from '../utils/imageOptimizer';
 
 export const DEFAULT_INSTAGRAM_POSTS: InstagramPost[] = [];
 
@@ -119,6 +120,16 @@ export async function seedDatabaseIfEmpty(force = false) {
       await setDoc(doc(db, 'settings', 'hero'), {
         title: 'Minimal Elegance.',
         subtitle: 'Everyday Luxury.'
+      });
+    }
+
+    const carouselDoc = await getDoc(doc(db, 'settings', 'hero_carousel'));
+    if (!carouselDoc.exists()) {
+      console.log('Seeding default hero carousel slides into Firestore...');
+      await setDoc(doc(db, 'settings', 'hero_carousel'), {
+        slides: DEFAULT_HERO_SLIDES,
+        autoPlayIntervalSeconds: 6,
+        activeFestiveTheme: 'classic'
       });
     }
   } catch (error) {
@@ -273,20 +284,110 @@ export async function updateHeroText(title: string, subtitle: string): Promise<v
   await setDoc(doc(db, 'settings', 'hero'), { title, subtitle });
 }
 
+// Settings / Store Payment QR Code API
+export async function getStorePaymentQr(): Promise<string> {
+  try {
+    const docSnap = await getDoc(doc(db, 'settings', 'payment_qr'));
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      if (data && typeof data.qrImageUrl === 'string' && data.qrImageUrl.trim()) {
+        return data.qrImageUrl;
+      }
+    }
+  } catch (err) {
+    console.warn('Could not fetch payment_qr from Firestore, falling back to cache:', err);
+  }
+  try {
+    return localStorage.getItem('zerish_custom_qr_code') || '';
+  } catch {
+    return '';
+  }
+}
+
+export async function updateStorePaymentQr(qrImageUrl: string): Promise<void> {
+  let optimized = qrImageUrl;
+  if (optimized && optimized.startsWith('data:image/')) {
+    try {
+      optimized = await optimizeDataUrl(optimized, 600, 0.85);
+    } catch (e) {
+      console.warn('Failed to optimize QR image, using raw string', e);
+    }
+  }
+  await setDoc(doc(db, 'settings', 'payment_qr'), {
+    qrImageUrl: optimized,
+    updatedAt: new Date().toISOString()
+  });
+  try {
+    if (optimized) {
+      localStorage.setItem('zerish_custom_qr_code', optimized);
+    } else {
+      localStorage.removeItem('zerish_custom_qr_code');
+    }
+  } catch {
+    // Ignore storage quota error
+  }
+}
+
+// Settings / Hero Festive Carousel API
+export async function getHeroCarouselSettings(): Promise<HeroCarouselSettings> {
+  try {
+    const docSnap = await getDoc(doc(db, 'settings', 'hero_carousel'));
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      if (data && Array.isArray(data.slides) && data.slides.length > 0) {
+        return {
+          slides: data.slides as HeroSlide[],
+          autoPlayIntervalSeconds: data.autoPlayIntervalSeconds || 6,
+          activeFestiveTheme: data.activeFestiveTheme || 'classic'
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('Could not fetch hero_carousel from Firestore, fallback to defaults:', err);
+  }
+  return {
+    slides: DEFAULT_HERO_SLIDES,
+    autoPlayIntervalSeconds: 6,
+    activeFestiveTheme: 'classic'
+  };
+}
+
+export async function updateHeroCarouselSettings(settings: HeroCarouselSettings): Promise<void> {
+  await setDoc(doc(db, 'settings', 'hero_carousel'), settings);
+}
+
 // Settings / Categories API
 export async function getCategories(): Promise<CategorySetting[]> {
-  const docSnap = await getDoc(doc(db, 'settings', 'categories'));
-  if (docSnap.exists()) {
-    const data = docSnap.data();
-    if (data && Array.isArray(data.list)) {
-      return data.list as CategorySetting[];
+  try {
+    const docSnap = await getDoc(doc(db, 'settings', 'categories'));
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      if (data && Array.isArray(data.list) && data.list.length > 0) {
+        return data.list as CategorySetting[];
+      }
     }
+  } catch (err) {
+    console.warn('Firestore getCategories error, falling back to default:', err);
   }
   return DEFAULT_CATEGORIES;
 }
 
 export async function updateCategories(categories: CategorySetting[]): Promise<void> {
-  await setDoc(doc(db, 'settings', 'categories'), { list: categories });
+  const sanitizedList = await Promise.all(
+    categories.map(async (cat) => {
+      let img = cat.imageUrl || '';
+      if (img && img.startsWith('data:image/')) {
+        img = await optimizeDataUrl(img, 800, 0.85);
+      }
+      return {
+        tabId: cat.tabId,
+        title: cat.title,
+        subtitle: cat.subtitle || '',
+        imageUrl: img
+      };
+    })
+  );
+  await setDoc(doc(db, 'settings', 'categories'), { list: sanitizedList });
 }
 
 
