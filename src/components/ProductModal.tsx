@@ -13,9 +13,14 @@ import {
   ChevronLeft, 
   ChevronRight,
   RotateCcw,
-  Award
+  Award,
+  Share2,
+  MessageCircle,
+  Copy,
+  Check
 } from 'lucide-react';
 import { Product } from '../types';
+import { shareProductToWhatsApp, formatWhatsAppProductMessage } from '../utils/shareUtils';
 
 interface ProductModalProps {
   product: Product;
@@ -256,6 +261,7 @@ export default function ProductModal({
   // Frequently Bought Together Bundle (Find 1 item from another category)
   const bundleItem = products.find(p => p.category !== product.category && p.stock && p.stock > 0);
   const [bundleAdded, setBundleAdded] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
 
   const handleAddBundle = () => {
     if (!bundleItem) return;
@@ -422,18 +428,6 @@ export default function ProductModal({
               <Maximize2 className="w-3.5 h-3.5 animate-pulse" />
               <span>Fullscreen</span>
             </button>
-
-            {/* Wishlist button */}
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleWishlist(product.id);
-              }}
-              className="absolute top-3 right-3 p-2 bg-white/90 hover:bg-espresso hover:text-white rounded-full text-espresso shadow-xs transition-colors z-10"
-              title="Add to Wishlist"
-            >
-              <Heart className={`w-4 h-4 ${inWishlist ? 'fill-rose-500 text-rose-500' : ''}`} />
-            </button>
           </div>
 
           {/* Thumbnails list carousel */}
@@ -543,14 +537,65 @@ export default function ProductModal({
                       : 'bg-[#FAF8F6] border-espresso text-espresso hover:bg-espresso hover:text-white'
                   }`}
                 >
-                  {bundleAdded ? 'Added Bundle!' : 'Add Both to Enquiry'}
+                  {bundleAdded ? 'Added Bundle!' : 'Add Both to Cart'}
                 </button>
               </div>
             </div>
           )}
 
+          {/* Amazon-Style Wishlist & WhatsApp Share Bar */}
+          <div className="space-y-2 pt-1">
+            <div className="grid grid-cols-2 gap-2.5">
+              {/* Wishlist Button */}
+              <button
+                type="button"
+                onClick={() => onToggleWishlist(product.id)}
+                className={`py-3 px-3 border rounded-xs font-extrabold text-[10px] uppercase tracking-wider flex items-center justify-center space-x-2 transition-all cursor-pointer ${
+                  inWishlist
+                    ? 'bg-rose-50 border-rose-300 text-rose-600 shadow-2xs'
+                    : 'bg-white border-espresso/25 text-espresso hover:border-espresso hover:bg-espresso/5'
+                }`}
+                title={inWishlist ? "Remove from Wishlist" : "Save to Wishlist"}
+              >
+                <Heart className={`w-4 h-4 ${inWishlist ? 'fill-rose-500 text-rose-500' : 'text-espresso'}`} />
+                <span>{inWishlist ? 'Saved in Wishlist' : 'Add to Wishlist'}</span>
+              </button>
+
+              {/* WhatsApp Share Button */}
+              <button
+                type="button"
+                onClick={() => shareProductToWhatsApp(product)}
+                className="py-3 px-3 bg-[#25D366]/10 hover:bg-[#25D366]/20 border border-[#25D366]/40 text-[#128C7E] rounded-xs font-extrabold text-[10px] uppercase tracking-wider flex items-center justify-center space-x-2 transition-all cursor-pointer hover:scale-[1.01]"
+                title="Share product with image & details on WhatsApp"
+              >
+                <MessageCircle className="w-4 h-4 fill-[#25D366] text-[#25D366]" />
+                <span>Share on WhatsApp</span>
+              </button>
+            </div>
+
+            {/* Quick direct link copy */}
+            <div className="flex items-center justify-between text-[10px] text-espresso/60 px-1 pt-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  const url = `${window.location.origin}/#product-${product.id}`;
+                  navigator.clipboard?.writeText(url);
+                  setIsCopied(true);
+                  setTimeout(() => setIsCopied(false), 2000);
+                }}
+                className="hover:text-terracotta flex items-center space-x-1.5 transition-colors cursor-pointer"
+              >
+                {isCopied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3 text-espresso/60" />}
+                <span className={isCopied ? "text-emerald-700 font-bold" : ""}>
+                  {isCopied ? 'Product Link Copied to Clipboard!' : 'Copy Direct Share Link'}
+                </span>
+              </button>
+              <span className="font-mono text-[9px] uppercase tracking-widest text-espresso/45">100% Anti-Tarnish</span>
+            </div>
+          </div>
+
           {/* Standard Buy / Add-to-bag button */}
-          <div className="pt-2">
+          <div className="pt-1">
             <button
               onClick={() => {
                 onAddToCart(product);
@@ -564,7 +609,7 @@ export default function ProductModal({
               }`}
             >
               <ShoppingBag className="w-4 h-4" />
-              <span>{(product.stock || 0) === 0 ? 'Notify When Restocked' : 'Add to Enquiry Curation'}</span>
+              <span>{(product.stock || 0) === 0 ? 'Sold Out / Out of Stock' : 'Add to Cart'}</span>
             </button>
           </div>
 
