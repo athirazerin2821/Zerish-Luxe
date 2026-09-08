@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
-import { X, Search, Truck, MapPin, CheckCircle, Clock } from 'lucide-react';
+import { X, Search, Truck, MapPin, CheckCircle, Clock, Eye } from 'lucide-react';
 import { Order } from '../types';
+import { db } from '../firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 interface TrackOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
   orders: Order[];
+  onViewOrderDetails?: (order: Order) => void;
 }
 
-export default function TrackOrderModal({ isOpen, onClose, orders }: TrackOrderModalProps) {
+export default function TrackOrderModal({ isOpen, onClose, orders, onViewOrderDetails }: TrackOrderModalProps) {
   const [trackingId, setTrackingId] = useState('');
   const [searchResult, setSearchResult] = useState<Order | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
@@ -18,18 +21,54 @@ export default function TrackOrderModal({ isOpen, onClose, orders }: TrackOrderM
     if (!trackingId.trim()) return;
 
     const cleanId = trackingId.trim();
-    try {
-      const res = await fetch(`/api/customer/orders/${encodeURIComponent(cleanId)}`);
-      if (res.ok) {
-        const found = await res.json();
-        setSearchResult(found);
-      } else {
-        setSearchResult(null);
+    let foundOrder: Order | null = null;
+
+    // 1. Try local memory state if we have orders loaded
+    if (orders && orders.length > 0) {
+      const matched = orders.find(
+        o => o.id.toUpperCase() === cleanId.toUpperCase() || 
+             (o.trackingNumber && o.trackingNumber.toUpperCase() === cleanId.toUpperCase())
+      );
+      if (matched) {
+        foundOrder = matched;
       }
-    } catch (err) {
-      console.error('Error tracking order:', err);
-      setSearchResult(null);
     }
+
+    // 2. Try the Express /api fallback
+    if (!foundOrder) {
+      try {
+        const res = await fetch(`/api/customer/orders/${encodeURIComponent(cleanId)}`);
+        if (res.ok) {
+          foundOrder = await res.json();
+        }
+      } catch (err) {
+        console.warn('API order lookup failed (expected in client-only hosting):', err);
+      }
+    }
+
+    // 3. Direct Firestore Document lookup fallback (ZL-XXXX)
+    if (!foundOrder) {
+      try {
+        // Doc IDs are uppercase order ID, e.g. ZL-4291 or ZL-8910
+        const docRef = doc(db, 'orders', cleanId.toUpperCase());
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          foundOrder = docSnap.data() as Order;
+        } else {
+          // Try without matching the ZL- prefix if they only entered digits
+          const fullId = cleanId.toUpperCase().startsWith('ZL-') ? cleanId.toUpperCase() : `ZL-${cleanId.toUpperCase()}`;
+          const docRefPrefixed = doc(db, 'orders', fullId);
+          const docSnapPrefixed = await getDoc(docRefPrefixed);
+          if (docSnapPrefixed.exists()) {
+            foundOrder = docSnapPrefixed.data() as Order;
+          }
+        }
+      } catch (err) {
+        console.error('Firestore order direct lookup failed:', err);
+      }
+    }
+
+    setSearchResult(foundOrder);
     setHasSearched(true);
   };
 
@@ -201,6 +240,19 @@ export default function TrackOrderModal({ isOpen, onClose, orders }: TrackOrderM
                     We process orders within 12 hours. Express deliveries to Southern destinations like Kochi, Chennai, Bangalore, and Coimbatore typically take 24–48 hours.
                   </p>
                 </div>
+
+                {onViewOrderDetails && (
+                  <button
+                    onClick={() => {
+                      onViewOrderDetails(searchResult);
+                      onClose();
+                    }}
+                    className="w-full py-3 bg-terracotta hover:bg-espresso text-white text-xs uppercase tracking-widest font-extrabold rounded-xs transition-colors cursor-pointer flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    <Eye className="w-4 h-4" />
+                    <span>View Complete Order Details & Receipt</span>
+                  </button>
+                )}
 
               </div>
             ) : (
