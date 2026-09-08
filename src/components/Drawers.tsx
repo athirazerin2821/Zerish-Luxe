@@ -122,7 +122,7 @@ export function SearchDrawer({ isOpen, onClose, products, onSelectProduct, onAdd
                       <button 
                         onClick={() => onAddToCart(p)}
                         className="p-1.5 bg-espresso text-white hover:bg-terracotta transition-all rounded-xs"
-                        title="Add to Enquiry List"
+                        title="Add to Cart & Pay"
                       >
                         <ShoppingBag className="w-3.5 h-3.5" />
                       </button>
@@ -221,13 +221,13 @@ export function WishlistDrawer({ isOpen, onClose, wishlist, products, onRemoveFr
                             onAddToCart(p);
                             onRemoveFromWishlist(p.id);
                           }}
-                          className="px-2.5 py-1.5 bg-espresso text-[#FAF8F6] hover:bg-terracotta transition-colors text-[9px] uppercase tracking-widest font-extrabold"
+                          className="px-2.5 py-1.5 bg-espresso text-[#FAF8F6] hover:bg-terracotta transition-colors text-[9px] uppercase tracking-widest font-extrabold cursor-pointer"
                         >
-                          Add to Enquiry List
+                          Add to Cart & Pay
                         </button>
                         <button 
                           onClick={() => onRemoveFromWishlist(p.id)}
-                          className="p-1.5 text-espresso/45 hover:text-rose-500 rounded-full hover:bg-rose-50 transition-colors"
+                          className="p-1.5 text-espresso/45 hover:text-rose-500 rounded-full hover:bg-rose-50 transition-colors cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -257,6 +257,7 @@ interface AccountDrawerProps {
   currentUser: UserAccount | null;
   onSignUp: (user: UserAccount) => void;
   onLogOut: () => void;
+  onSelectOrder?: (order: Order) => void;
 }
 
 export function AccountDrawer({ 
@@ -266,7 +267,8 @@ export function AccountDrawer({
   onOpenTrackModal, 
   currentUser, 
   onSignUp, 
-  onLogOut 
+  onLogOut,
+  onSelectOrder 
 }: AccountDrawerProps) {
   const [formData, setFormData] = useState({
     name: '',
@@ -470,12 +472,12 @@ export function AccountDrawer({
                     <p><span className="text-taupe font-semibold">Curation Hub:</span> {currentUser.city}, {currentUser.state} ({currentUser.postalCode})</p>
                   </div>
 
-                  {/* Enquiry History */}
+                  {/* Order History */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <h4 className="font-serif text-xs font-bold text-espresso flex items-center space-x-1">
                         <Clock className="w-3.5 h-3.5 text-taupe" />
-                        <span>My Enquiry Logs ({userOrders.length})</span>
+                        <span>My Orders & Receipts ({userOrders.length})</span>
                       </h4>
                       
                       <button 
@@ -483,34 +485,41 @@ export function AccountDrawer({
                           onOpenTrackModal();
                           onClose();
                         }}
-                        className="text-[9px] text-terracotta font-extrabold uppercase tracking-wider hover:text-espresso transition-colors"
+                        className="text-[9px] text-terracotta font-extrabold uppercase tracking-wider hover:text-espresso transition-colors cursor-pointer"
                       >
-                        Track Enquiry
+                        Track Order
                       </button>
                     </div>
 
                     {userOrders.length === 0 ? (
                       <div className="text-center py-8 text-taupe text-xs leading-normal">
-                        You have not submitted any enquiries yet. Submit your curated items via checkout.
+                        You have not placed any orders yet. Add items to your bag and proceed to payment.
                       </div>
                     ) : (
-                      <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1">
+                      <div className="space-y-3 max-h-[290px] overflow-y-auto pr-1">
                         {userOrders.map(o => (
                           <div 
                             key={o.id} 
-                            className="bg-[#FAF8F6] border border-espresso/5 p-3 rounded-xs space-y-2 hover:border-espresso/15 transition-all"
+                            className="bg-[#FAF8F6] border border-espresso/10 p-3 rounded-xs space-y-2 hover:border-terracotta/40 transition-all shadow-xs"
                           >
                             <div className="flex items-center justify-between text-[10px]">
-                              <span className="font-semibold text-espresso uppercase tracking-wider">ID: {o.id}</span>
-                              <span className={`px-2 py-0.5 rounded-full font-bold uppercase text-[8px] tracking-wider ${
-                                o.status === 'Delivered' 
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                                  : o.status === 'Dispatched'
-                                  ? 'bg-blue-50 text-blue-700 border border-blue-100'
-                                  : 'bg-amber-50 text-amber-700 border border-amber-100'
-                              }`}>
-                                {o.status === 'Delivered' ? 'Replied' : o.status === 'Dispatched' ? 'In Progress' : 'Received'}
-                              </span>
+                              <span className="font-semibold text-espresso uppercase tracking-wider">Order #{o.id}</span>
+                              <div className="flex items-center gap-1.5">
+                                {o.isPaid && (
+                                  <span className="bg-emerald-100 text-emerald-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded-full uppercase">
+                                    Paid
+                                  </span>
+                                )}
+                                <span className={`px-2 py-0.5 rounded-full font-bold uppercase text-[8px] tracking-wider ${
+                                  o.status === 'Delivered' 
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                    : o.status === 'Dispatched'
+                                    ? 'bg-blue-50 text-blue-700 border border-blue-100'
+                                    : 'bg-amber-50 text-amber-700 border border-amber-100'
+                                }`}>
+                                  {o.status === 'Delivered' ? 'Delivered' : o.status === 'Dispatched' ? 'Dispatched' : 'Confirmed'}
+                                </span>
+                              </div>
                             </div>
 
                             {/* Items list summary */}
@@ -525,13 +534,26 @@ export function AccountDrawer({
 
                             <div className="flex items-center justify-between text-[10px]">
                               <span className="text-taupe">{o.date}</span>
-                              <span className="font-bold text-espresso">Value: ₹{o.total.toLocaleString('en-IN')}</span>
+                              <span className="font-bold text-espresso">Total: ₹{o.total.toLocaleString('en-IN')}</span>
                             </div>
 
-                            <div className="flex items-center justify-between bg-white px-2 py-1 border border-espresso/5 rounded-xs text-[9px]">
-                              <span className="text-taupe uppercase tracking-wider">Enquiry Code:</span>
+                            <div className="flex items-center justify-between bg-white px-2 py-1.5 border border-espresso/5 rounded-xs text-[9px]">
+                              <span className="text-taupe uppercase tracking-wider">Tracking:</span>
                               <span className="font-mono font-bold text-espresso uppercase">{o.trackingNumber}</span>
                             </div>
+
+                            {onSelectOrder && (
+                              <button
+                                onClick={() => {
+                                  onSelectOrder(o);
+                                  onClose();
+                                }}
+                                className="w-full py-1.5 bg-linen/50 hover:bg-terracotta hover:text-white text-espresso text-[9px] uppercase tracking-wider font-extrabold rounded-xs transition-colors cursor-pointer flex items-center justify-center gap-1 mt-1"
+                              >
+                                <span>View Full Order Details & Invoice</span>
+                                <ChevronRight className="w-3 h-3" />
+                              </button>
+                            )}
 
                           </div>
                         ))}
