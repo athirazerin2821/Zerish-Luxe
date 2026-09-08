@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Lock, 
@@ -21,11 +21,20 @@ import {
   MessageSquare,
   Instagram,
   Camera,
-  Video
+  Video,
+  ArrowUp,
+  ArrowDown,
+  Layers,
+  Wand2,
+  PlusCircle,
+  QrCode,
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react';
-import { Product, Order, Coupon, SalesAnalytics, Testimonial, UserAccount, CategorySetting, InstagramPost } from '../types';
-import { PRESET_IMAGE_TEMPLATES } from '../data';
+import { Product, Order, Coupon, SalesAnalytics, Testimonial, UserAccount, CategorySetting, InstagramPost, HeroSlide, HeroCarouselSettings } from '../types';
+import { PRESET_IMAGE_TEMPLATES, DEFAULT_HERO_SLIDES, FESTIVE_HERO_PRESETS, FestivePreset } from '../data';
 import { compressImageFile } from '../utils/imageOptimizer';
+import { updateStorePaymentQr, getStorePaymentQr } from '../services/firebaseDb';
 
 interface SellerPortalProps {
   isOpen: boolean;
@@ -45,6 +54,8 @@ interface SellerPortalProps {
   onDeleteCoupon: (code: string) => void;
   heroText: { title: string; subtitle: string };
   onUpdateHeroText: (text: { title: string; subtitle: string }) => void;
+  heroCarouselSettings?: HeroCarouselSettings;
+  onUpdateHeroCarouselSettings?: (settings: HeroCarouselSettings) => Promise<void> | void;
   reviews?: Testimonial[];
   onDeleteReview?: (id: string) => void;
   categories?: CategorySetting[];
@@ -52,6 +63,8 @@ interface SellerPortalProps {
   instagramPosts?: InstagramPost[];
   onAddInstagramPost?: (post: InstagramPost) => Promise<void> | void;
   onDeleteInstagramPost?: (id: string) => Promise<void> | void;
+  storePaymentQr?: string;
+  onUpdateStorePaymentQr?: (qr: string) => Promise<void> | void;
 }
 
 export default function SellerPortal({
@@ -72,13 +85,17 @@ export default function SellerPortal({
   onDeleteCoupon,
   heroText,
   onUpdateHeroText,
+  heroCarouselSettings,
+  onUpdateHeroCarouselSettings,
   reviews = [],
   onDeleteReview,
   categories = [],
   onUpdateCategories,
   instagramPosts = [],
   onAddInstagramPost,
-  onDeleteInstagramPost
+  onDeleteInstagramPost,
+  storePaymentQr,
+  onUpdateStorePaymentQr
 }: SellerPortalProps) {
   // Auth states
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -345,10 +362,202 @@ export default function SellerPortal({
   const [bannerSub, setBannerSub] = useState(heroText.subtitle);
   const [bannerUpdated, setBannerUpdated] = useState(false);
 
+  // Store Payment QR Code state
+  const [customStoreQr, setCustomStoreQr] = useState<string>(() => storePaymentQr || '');
+  const [qrUploadLoading, setQrUploadLoading] = useState(false);
+  const [qrSavedNotice, setQrSavedNotice] = useState(false);
+
+  useEffect(() => {
+    if (storePaymentQr) {
+      setCustomStoreQr(storePaymentQr);
+    } else {
+      getStorePaymentQr().then(qr => {
+        if (qr) setCustomStoreQr(qr);
+      }).catch(err => console.warn('Could not fetch store QR:', err));
+    }
+  }, [isOpen, storePaymentQr]);
+
+  const handleCustomStoreQrUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file (PNG, JPG, WEBP, or SVG).');
+      return;
+    }
+    setQrUploadLoading(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = reader.result as string;
+      try {
+        setCustomStoreQr(base64);
+        await updateStorePaymentQr(base64);
+        if (onUpdateStorePaymentQr) {
+          await onUpdateStorePaymentQr(base64);
+        }
+        window.dispatchEvent(new Event('custom_qr_code_updated'));
+        setQrSavedNotice(true);
+        setTimeout(() => setQrSavedNotice(false), 4000);
+      } catch (err) {
+        console.warn('Error saving store QR code:', err);
+      } finally {
+        setQrUploadLoading(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveStoreQr = async () => {
+    if (confirm('Are you sure you want to remove your custom QR code?')) {
+      setCustomStoreQr('');
+      try {
+        await updateStorePaymentQr('');
+        if (onUpdateStorePaymentQr) {
+          await onUpdateStorePaymentQr('');
+        }
+        window.dispatchEvent(new Event('custom_qr_code_updated'));
+      } catch (err) {
+        console.warn('Error removing store QR code:', err);
+      }
+    }
+  };
+
+  // Festive & Hero Carousel settings state
+  const [localHeroSettings, setLocalHeroSettings] = useState<HeroCarouselSettings>(() => {
+    return heroCarouselSettings || {
+      slides: DEFAULT_HERO_SLIDES,
+      autoPlayIntervalSeconds: 6,
+      activeFestiveTheme: 'classic'
+    };
+  });
+  const [heroSettingsSaved, setHeroSettingsSaved] = useState(false);
+  const [heroSaving, setHeroSaving] = useState(false);
+  const [heroUploadIdx, setHeroUploadIdx] = useState<number | null>(null);
+  const [activePreviewSlideIdx, setActivePreviewSlideIdx] = useState(0);
+
+  useEffect(() => {
+    if (heroCarouselSettings && heroCarouselSettings.slides && heroCarouselSettings.slides.length > 0) {
+      setLocalHeroSettings(heroCarouselSettings);
+    }
+  }, [heroCarouselSettings]);
+
+  const handleSelectFestivePreset = (preset: FestivePreset) => {
+    if (confirm(`Apply the "${preset.name}" festive theme preset? This will load festive banners, badges, and headlines for the carousel.`)) {
+      setLocalHeroSettings(prev => ({
+        ...prev,
+        activeFestiveTheme: preset.id,
+        slides: [...preset.slides]
+      }));
+      setActivePreviewSlideIdx(0);
+    }
+  };
+
+  const handleSlideFieldChange = (idx: number, field: keyof HeroSlide, value: any) => {
+    setLocalHeroSettings(prev => {
+      const newSlides = [...prev.slides];
+      newSlides[idx] = { ...newSlides[idx], [field]: value };
+      return { ...prev, slides: newSlides };
+    });
+  };
+
+  const handleSlideImageUpload = async (idx: number, file: File) => {
+    setHeroUploadIdx(idx);
+    try {
+      const { uploadProductImage } = await import('../services/firebaseDb');
+      const url = await Promise.race([
+        uploadProductImage(file),
+        new Promise<string>((_, reject) => 
+          setTimeout(() => reject(new Error('TIMEOUT')), 15000)
+        )
+      ]);
+      handleSlideFieldChange(idx, 'imageUrl', url);
+      alert('Ultra-HD hero slide image uploaded successfully!');
+    } catch (error) {
+      console.warn('Firebase Storage upload failed or timed out. Falling back to Ultra HD compression.', error);
+      try {
+        const base64Url = await compressImageFile(file);
+        handleSlideFieldChange(idx, 'imageUrl', base64Url);
+        alert('Ultra-HD hero slide image processed and saved successfully!');
+      } catch (compressErr) {
+        console.error('Compression failed:', compressErr);
+        alert('Error processing file.');
+      }
+    } finally {
+      setHeroUploadIdx(null);
+    }
+  };
+
+  const handleAddHeroSlide = () => {
+    const newSlide: HeroSlide = {
+      id: `slide_${Date.now()}`,
+      imageUrl: PRESET_IMAGE_TEMPLATES[0].url,
+      badge: '✨ Special Festive Edition',
+      title: 'Minimal. Timeless.',
+      subtitle: 'Made to Last.',
+      description: 'Handpicked minimal earrings & chains that stay with you every moment, every day. 100% waterproof & anti-tarnish.',
+      ctaText: 'Shop Collection',
+      ctaTab: 'best-sellers',
+      secondaryCtaText: 'New Arrivals',
+      secondaryCtaTab: 'new-arrivals',
+      isActive: true
+    };
+
+    setLocalHeroSettings(prev => ({
+      ...prev,
+      slides: [...prev.slides, newSlide]
+    }));
+    setActivePreviewSlideIdx(localHeroSettings.slides.length);
+  };
+
+  const handleDeleteHeroSlide = (idx: number) => {
+    if (localHeroSettings.slides.length <= 1) {
+      alert('At least one hero slide must remain in the carousel.');
+      return;
+    }
+    if (!confirm('Are you sure you want to delete this hero slide?')) return;
+    setLocalHeroSettings(prev => ({
+      ...prev,
+      slides: prev.slides.filter((_, i) => i !== idx)
+    }));
+    setActivePreviewSlideIdx(0);
+  };
+
+  const handleMoveSlide = (idx: number, direction: 'up' | 'down') => {
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= localHeroSettings.slides.length) return;
+
+    setLocalHeroSettings(prev => {
+      const slides = [...prev.slides];
+      const temp = slides[idx];
+      slides[idx] = slides[targetIdx];
+      slides[targetIdx] = temp;
+      return { ...prev, slides };
+    });
+    setActivePreviewSlideIdx(targetIdx);
+  };
+
+  const handleSaveHeroCarousel = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setHeroSaving(true);
+    try {
+      if (onUpdateHeroCarouselSettings) {
+        await onUpdateHeroCarouselSettings(localHeroSettings);
+      }
+      setHeroSettingsSaved(true);
+      setTimeout(() => setHeroSettingsSaved(false), 3000);
+      alert('Festive hero carousel settings updated successfully!');
+    } catch (err: any) {
+      console.error(err);
+      alert(`Failed to save hero settings: ${err.message || 'Unknown error'}`);
+    } finally {
+      setHeroSaving(false);
+    }
+  };
+
   // Dynamic Category Images state
   const [localCategories, setLocalCategories] = useState<CategorySetting[]>(categories);
   const [categoriesUpdated, setCategoriesUpdated] = useState(false);
   const [catUploadingIdx, setCatUploadingIdx] = useState<number | null>(null);
+  const [catSavedIdx, setCatSavedIdx] = useState<number | null>(null);
 
   // Add Category form states
   const [newCatName, setNewCatName] = useState('');
@@ -356,7 +565,7 @@ export default function SellerPortal({
   const [newCatImg, setNewCatImg] = useState('');
   const [newCatUploading, setNewCatUploading] = useState(false);
 
-  const handleAddNewCategory = (e: React.MouseEvent) => {
+  const handleAddNewCategory = async (e: React.MouseEvent) => {
     e.preventDefault();
     if (!newCatName.trim()) {
       alert('Please enter a Category Name');
@@ -375,16 +584,32 @@ export default function SellerPortal({
       imageUrl: newCatImg.trim() || 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?q=80&w=500&auto=format&fit=crop'
     };
 
-    setLocalCategories(prev => [...prev, newCat]);
+    const updated = [...localCategories, newCat];
+    setLocalCategories(updated);
     setNewCatName('');
     setNewCatSub('');
     setNewCatImg('');
-    alert('Category added to local list! Click "Update Category Settings" below to finalize and save to the database.');
+    if (onUpdateCategories) {
+      try {
+        await onUpdateCategories(updated);
+      } catch (err) {
+        console.error('Error saving new category:', err);
+      }
+    }
+    alert('New category added and published to storefront successfully!');
   };
 
-  const handleDeleteCategory = (idx: number) => {
-    if (!confirm('Are you sure you want to delete this category? (Make sure no active products rely on it)')) return;
-    setLocalCategories(prev => prev.filter((_, i) => i !== idx));
+  const handleDeleteCategory = async (idx: number) => {
+    if (!confirm('Are you sure you want to delete this category?')) return;
+    const updated = localCategories.filter((_, i) => i !== idx);
+    setLocalCategories(updated);
+    if (onUpdateCategories) {
+      try {
+        await onUpdateCategories(updated);
+      } catch (err) {
+        console.error('Error deleting category:', err);
+      }
+    }
   };
 
   const handleNewCategoryUpload = async (file: File) => {
@@ -398,16 +623,14 @@ export default function SellerPortal({
         )
       ]);
       setNewCatImg(url);
-      alert('Category image uploaded in Ultra HD successfully!');
     } catch (error) {
-      console.warn('Upload failed. Falling back to Ultra HD compression.', error);
+      console.warn('Storage upload fallback to compressed image:', error);
       try {
-        const base64Url = await compressImageFile(file);
+        const base64Url = await compressImageFile(file, 800, 0.85);
         setNewCatImg(base64Url);
-        alert('Category image optimized in Ultra HD and saved successfully!');
       } catch (compressErr) {
         console.error('Compression failed:', compressErr);
-        alert('Error processing file.');
+        alert('Error processing image file.');
       }
     } finally {
       setNewCatUploading(false);
@@ -426,8 +649,22 @@ export default function SellerPortal({
     setLocalCategories(updated);
   };
 
+  const handleSaveSingleCategory = async (idx: number) => {
+    if (onUpdateCategories) {
+      try {
+        await onUpdateCategories(localCategories);
+        setCatSavedIdx(idx);
+        setTimeout(() => setCatSavedIdx(null), 3000);
+      } catch (err: any) {
+        alert('Error saving category: ' + (err.message || err));
+      }
+    }
+  };
+
   const handleCategoryUpload = async (idx: number, file: File) => {
     setCatUploadingIdx(idx);
+    let finalImageUrl = '';
+
     try {
       const { uploadProductImage } = await import('../services/firebaseDb');
       const url = await Promise.race([
@@ -436,25 +673,35 @@ export default function SellerPortal({
           setTimeout(() => reject(new Error('TIMEOUT')), 15000)
         )
       ]);
-      const updated = [...localCategories];
-      updated[idx] = { ...updated[idx], imageUrl: url };
-      setLocalCategories(updated);
-      alert('Category image uploaded in Ultra HD successfully!');
+      finalImageUrl = url;
     } catch (error) {
-      console.warn('Upload failed. Falling back to Ultra HD compression.', error);
+      console.warn('Firebase storage upload failed or timed out. Falling back to HD compression.', error);
       try {
-        const base64Url = await compressImageFile(file);
-        const updated = [...localCategories];
-        updated[idx] = { ...updated[idx], imageUrl: base64Url };
-        setLocalCategories(updated);
-        alert('Category image optimized in Ultra HD and saved successfully!');
+        const base64Url = await compressImageFile(file, 800, 0.85);
+        finalImageUrl = base64Url;
       } catch (compressErr) {
         console.error('Compression failed:', compressErr);
         alert('Error processing file.');
       }
-    } finally {
-      setCatUploadingIdx(null);
     }
+
+    if (finalImageUrl) {
+      const updated = [...localCategories];
+      updated[idx] = { ...updated[idx], imageUrl: finalImageUrl };
+      setLocalCategories(updated);
+      
+      // Auto-save and sync immediately to database and storefront
+      if (onUpdateCategories) {
+        try {
+          await onUpdateCategories(updated);
+          setCatSavedIdx(idx);
+          setTimeout(() => setCatSavedIdx(null), 3500);
+        } catch (saveErr) {
+          console.error('Error saving updated categories to database:', saveErr);
+        }
+      }
+    }
+    setCatUploadingIdx(null);
   };
 
   const handleSaveCategories = async (e: React.FormEvent) => {
@@ -463,8 +710,8 @@ export default function SellerPortal({
       try {
         await onUpdateCategories(localCategories);
         setCategoriesUpdated(true);
-        setTimeout(() => setCategoriesUpdated(false), 2000);
-        alert('Category catalog images updated successfully!');
+        setTimeout(() => setCategoriesUpdated(false), 2500);
+        alert('Category settings and images saved to catalog successfully!');
       } catch (err: any) {
         alert('Error updating categories: ' + (err.message || err));
       }
@@ -2287,58 +2534,403 @@ export default function SellerPortal({
                   {/* ========================================== */}
                   {adminTab === 'settings' && (
                     <div className="space-y-8 max-w-4xl">
-                      {/* Homepage Hero Banner Settings */}
-                      <form onSubmit={handleSaveBanner} className="bg-white border border-espresso/10 p-5 rounded-xs space-y-4 max-w-lg shadow-3xs">
-                        <div className="border-b border-espresso/10 pb-2 flex items-center space-x-1.5">
-                          <Settings className="w-4 h-4 text-terracotta" />
-                          <h4 className="font-serif text-sm font-bold text-espresso">Live Homepage Customizer</h4>
-                        </div>
-
-                        <div className="space-y-3">
-                          <div>
-                            <label className="block text-[9px] uppercase tracking-wider font-semibold text-espresso mb-1">
-                              Hero Headline (Playfair Display)
-                            </label>
-                            <input 
-                              type="text" 
-                              required
-                              value={bannerTitle}
-                              onChange={(e) => setBannerTitle(e.target.value)}
-                              className="w-full border border-espresso/20 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
-                            />
+                      {/* Store Payment QR Code Settings */}
+                      <div className="bg-white border border-espresso/10 p-6 rounded-xs space-y-5 shadow-3xs">
+                        <div className="border-b border-espresso/10 pb-3 flex items-center justify-between">
+                          <div className="flex items-center space-x-2.5">
+                            <div className="w-8 h-8 rounded-full bg-espresso text-linen flex items-center justify-center">
+                              <QrCode className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <h4 className="font-serif text-base font-bold text-espresso">Store Payment QR Code</h4>
+                              <p className="text-[10px] text-taupe">Upload your personal or business UPI QR code for direct customer payments.</p>
+                            </div>
                           </div>
-
-                          <div>
-                            <label className="block text-[9px] uppercase tracking-wider font-semibold text-espresso mb-1">
-                              Hero Subtitle / Tagline
-                            </label>
-                            <input 
-                              type="text" 
-                              required
-                              value={bannerSub}
-                              onChange={(e) => setBannerSub(e.target.value)}
-                              className="w-full border border-espresso/20 p-2 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
-                            />
-                          </div>
-                        </div>
-
-                        <button 
-                          type="submit"
-                          className="py-2.5 px-6 bg-espresso hover:bg-terracotta text-[#FAF8F6] text-[10px] uppercase tracking-widest font-extrabold shadow-md transition-all flex items-center space-x-2 cursor-pointer"
-                        >
-                          {bannerUpdated ? (
-                            <>
-                              <Check className="w-3.5 h-3.5" />
-                              <span>Saved Banner changes!</span>
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles className="w-3.5 h-3.5 text-linen" />
-                              <span>Apply Banner Updates</span>
-                            </>
+                          {customStoreQr && (
+                            <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[9px] font-bold uppercase tracking-wider">
+                              Custom QR Active
+                            </span>
                           )}
-                        </button>
-                      </form>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+                          {/* QR Preview Frame */}
+                          <div className="flex flex-col items-center justify-center p-4 bg-[#FAF8F6] border border-espresso/10 rounded-xs">
+                            {customStoreQr ? (
+                              <img 
+                                src={customStoreQr} 
+                                alt="Store Custom QR Code" 
+                                className="w-44 h-44 object-contain rounded-xs bg-white p-2 border border-espresso/15 shadow-2xs" 
+                              />
+                            ) : (
+                              <div className="w-44 h-44 flex flex-col items-center justify-center text-center p-4 bg-white border border-dashed border-espresso/20 rounded-xs space-y-2">
+                                <QrCode className="w-10 h-10 text-taupe/40" />
+                                <span className="text-[10px] text-taupe font-medium">No custom QR code uploaded yet</span>
+                              </div>
+                            )}
+                            <p className="text-[9px] text-taupe uppercase tracking-widest font-extrabold mt-3">
+                              {customStoreQr ? 'Active Customer Payment QR' : 'Standard Fallback QR Code'}
+                            </p>
+                          </div>
+
+                          {/* Upload Controls & Description */}
+                          <div className="md:col-span-2 space-y-4">
+                            <div className="space-y-1">
+                              <h5 className="text-xs font-bold uppercase tracking-wider text-espresso">
+                                Upload Your Own QR Code Image
+                              </h5>
+                              <p className="text-[11px] text-taupe leading-relaxed">
+                                Upload any QR code image screenshot from Google Pay, PhonePe, Paytm, BharatPe, or your bank. Customers will scan this exact image at checkout.
+                              </p>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-3 pt-1">
+                              <input 
+                                type="file" 
+                                accept="image/*" 
+                                id="seller-qr-upload" 
+                                className="hidden" 
+                                onChange={handleCustomStoreQrUpload} 
+                              />
+                              <label
+                                htmlFor="seller-qr-upload"
+                                className="py-2.5 px-5 bg-espresso hover:bg-terracotta text-white rounded-xs text-[10px] uppercase tracking-widest font-extrabold flex items-center space-x-2 transition-all cursor-pointer shadow-xs"
+                              >
+                                <Upload className="w-3.5 h-3.5" />
+                                <span>{qrUploadLoading ? 'Uploading QR Code...' : customStoreQr ? 'Upload New QR Code' : 'Upload My QR Code'}</span>
+                              </label>
+
+                              {customStoreQr && (
+                                <button
+                                  type="button"
+                                  onClick={handleRemoveStoreQr}
+                                  className="py-2.5 px-4 border border-espresso/20 text-espresso/80 hover:text-terracotta hover:border-terracotta rounded-xs text-[10px] uppercase tracking-widest font-bold transition-all cursor-pointer"
+                                >
+                                  Remove & Reset
+                                </button>
+                              )}
+                            </div>
+
+                            {qrSavedNotice && (
+                              <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xs flex items-center space-x-2 text-emerald-800 text-[10px] font-bold">
+                                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>Custom QR Code saved and updated across store checkout instantly!</span>
+                              </div>
+                            )}
+
+                            <div className="p-3 bg-linen/25 border border-espresso/10 rounded-xs text-[9px] text-taupe space-y-1">
+                              <p className="font-bold text-espresso uppercase tracking-wider">Tips for Best Results:</p>
+                              <p>• Save a clear screenshot of your QR code from your UPI app (GPay / PhonePe / Paytm / Bank).</p>
+                              <p>• Crop tightly around the QR square before uploading for fastest scan response.</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Festive Event & Hero Carousel Customizer */}
+                      <div className="bg-white border border-espresso/10 p-6 rounded-xs space-y-6 shadow-3xs">
+                        <div className="border-b border-espresso/10 pb-3 flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <Sparkles className="w-5 h-5 text-terracotta" />
+                            <div>
+                              <h4 className="font-serif text-base font-bold text-espresso">Hero Section & Festive Event Carousel</h4>
+                              <p className="text-[10px] text-taupe">Customize hero banner slides, switch festive event themes (Diwali, Wedding, etc.), or upload Ultra-HD images.</p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleAddHeroSlide}
+                            className="py-1.5 px-3 bg-terracotta/10 hover:bg-terracotta text-terracotta hover:text-white border border-terracotta/30 text-[10px] uppercase tracking-wider font-bold rounded-xs flex items-center space-x-1.5 transition-all cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add New Slide</span>
+                          </button>
+                        </div>
+
+                        {/* Quick 1-Click Festive Presets Switcher */}
+                        <div className="bg-[#FAF8F6] p-4 rounded-xs border border-espresso/10 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] uppercase font-bold tracking-wider text-espresso flex items-center space-x-1.5">
+                              <Wand2 className="w-3.5 h-3.5 text-terracotta" />
+                              <span>1-Click Festive & Event Theme Presets</span>
+                            </span>
+                            <span className="text-[9px] text-taupe font-mono">
+                              Active: <span className="font-bold text-terracotta uppercase">{localHeroSettings.activeFestiveTheme || 'classic'}</span>
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                            {FESTIVE_HERO_PRESETS.map(preset => {
+                              const isSelected = localHeroSettings.activeFestiveTheme === preset.id;
+                              return (
+                                <button
+                                  key={preset.id}
+                                  type="button"
+                                  onClick={() => handleSelectFestivePreset(preset)}
+                                  className={`p-2.5 rounded-xs border text-left transition-all cursor-pointer flex flex-col justify-between space-y-1 ${
+                                    isSelected
+                                      ? 'bg-espresso text-[#FAF8F6] border-espresso shadow-xs'
+                                      : 'bg-white text-espresso border-espresso/15 hover:border-terracotta hover:bg-terracotta/5'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-base">{preset.icon}</span>
+                                    {isSelected && <Check className="w-3 h-3 text-terracotta" />}
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] font-bold leading-tight">{preset.name}</p>
+                                    <p className={`text-[8px] truncate ${isSelected ? 'text-[#FAF8F6]/70' : 'text-espresso/60'}`}>
+                                      {preset.badge}
+                                    </p>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Auto-Play Speed & Controls */}
+                        <div className="flex items-center justify-between bg-linen/20 p-3 rounded-xs border border-espresso/10">
+                          <div className="flex items-center space-x-3">
+                            <label className="text-[10px] uppercase tracking-wider font-semibold text-espresso">
+                              Auto-Play Slide Interval:
+                            </label>
+                            <select
+                              value={localHeroSettings.autoPlayIntervalSeconds || 6}
+                              onChange={(e) => setLocalHeroSettings(prev => ({ ...prev, autoPlayIntervalSeconds: Number(e.target.value) }))}
+                              className="border border-espresso/20 p-1 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden rounded-xs"
+                            >
+                              <option value={4}>4 Seconds (Fast)</option>
+                              <option value={6}>6 Seconds (Balanced - Recommended)</option>
+                              <option value={8}>8 Seconds (Relaxed)</option>
+                              <option value={10}>10 Seconds (Slow)</option>
+                            </select>
+                          </div>
+                          <span className="text-[10px] text-espresso/60 font-mono">
+                            Total Slides: <strong>{localHeroSettings.slides.length}</strong>
+                          </span>
+                        </div>
+
+                        {/* Slides List & Editor */}
+                        <div className="space-y-4">
+                          {localHeroSettings.slides.map((slide, idx) => (
+                            <div 
+                              key={slide.id || idx} 
+                              className="p-4 bg-[#FAF8F6] border border-espresso/15 rounded-xs space-y-3 relative group"
+                            >
+                              {/* Top Bar with Slide Number & Reorder/Delete */}
+                              <div className="flex items-center justify-between border-b border-espresso/10 pb-2">
+                                <div className="flex items-center space-x-2">
+                                  <span className="w-5 h-5 bg-espresso text-white rounded-full text-[10px] font-mono font-bold flex items-center justify-center">
+                                    {idx + 1}
+                                  </span>
+                                  <span className="text-[11px] font-bold text-espresso uppercase tracking-wider">
+                                    Slide #{idx + 1}: {slide.title || 'Untitled Slide'}
+                                  </span>
+                                </div>
+                                
+                                <div className="flex items-center space-x-1.5">
+                                  {/* Move Up */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMoveSlide(idx, 'up')}
+                                    disabled={idx === 0}
+                                    className="p-1 text-espresso/60 hover:text-espresso disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                                    title="Move Slide Up"
+                                  >
+                                    <ArrowUp className="w-3.5 h-3.5" />
+                                  </button>
+                                  {/* Move Down */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMoveSlide(idx, 'down')}
+                                    disabled={idx === localHeroSettings.slides.length - 1}
+                                    className="p-1 text-espresso/60 hover:text-espresso disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                                    title="Move Slide Down"
+                                  >
+                                    <ArrowDown className="w-3.5 h-3.5" />
+                                  </button>
+                                  {/* Delete Slide */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteHeroSlide(idx)}
+                                    className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-xs transition-colors cursor-pointer ml-2"
+                                    title="Delete Slide"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+                                {/* Slide Image & Upload */}
+                                <div className="md:col-span-4 space-y-2">
+                                  <div className="aspect-16/9 bg-white border border-espresso/15 rounded-xs overflow-hidden relative shadow-2xs">
+                                    <img 
+                                      src={slide.imageUrl} 
+                                      alt={slide.title} 
+                                      className="w-full h-full object-cover" 
+                                      referrerPolicy="no-referrer" 
+                                    />
+                                    {heroUploadIdx === idx && (
+                                      <div className="absolute inset-0 bg-espresso/70 flex flex-col items-center justify-center space-y-1">
+                                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                                        <span className="text-[9px] text-white font-mono">Uploading HD...</span>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* File Upload Button */}
+                                  <div>
+                                    <label className="block text-[8px] uppercase tracking-wider font-semibold text-espresso mb-1">
+                                      Upload Ultra-HD Slide Banner
+                                    </label>
+                                    <input 
+                                      type="file" 
+                                      accept="image/*"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) handleSlideImageUpload(idx, file);
+                                      }}
+                                      className="text-[10px] w-full text-espresso file:mr-2 file:py-1 file:px-2 file:rounded-xs file:border-0 file:text-[9px] file:font-bold file:bg-espresso file:text-[#FAF8F6] hover:file:bg-terracotta cursor-pointer"
+                                    />
+                                  </div>
+
+                                  {/* Or Image URL Input */}
+                                  <div>
+                                    <label className="block text-[8px] uppercase tracking-wider font-semibold text-espresso mb-0.5">
+                                      Or Image URL
+                                    </label>
+                                    <input 
+                                      type="url"
+                                      value={slide.imageUrl}
+                                      onChange={(e) => handleSlideFieldChange(idx, 'imageUrl', e.target.value)}
+                                      placeholder="https://..."
+                                      className="w-full border border-espresso/15 p-1 text-[10px] text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Slide Text Details */}
+                                <div className="md:col-span-8 space-y-2.5">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {/* Badge */}
+                                    <div>
+                                      <label className="block text-[8px] uppercase tracking-wider font-semibold text-espresso mb-0.5">
+                                        Festive / Event Badge Tag
+                                      </label>
+                                      <input 
+                                        type="text"
+                                        value={slide.badge || ''}
+                                        onChange={(e) => handleSlideFieldChange(idx, 'badge', e.target.value)}
+                                        placeholder="e.g. 🪔 Diwali Festive Special • 20% OFF"
+                                        className="w-full border border-espresso/15 p-1.5 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                      />
+                                    </div>
+
+                                    {/* Headline Title */}
+                                    <div>
+                                      <label className="block text-[8px] uppercase tracking-wider font-semibold text-espresso mb-0.5">
+                                        Main Headline (Playfair Display)
+                                      </label>
+                                      <input 
+                                        type="text"
+                                        required
+                                        value={slide.title}
+                                        onChange={(e) => handleSlideFieldChange(idx, 'title', e.target.value)}
+                                        placeholder="e.g. Minimal. Timeless."
+                                        className="w-full border border-espresso/15 p-1.5 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {/* Subtitle / Italic text */}
+                                    <div>
+                                      <label className="block text-[8px] uppercase tracking-wider font-semibold text-espresso mb-0.5">
+                                        Highlight Tagline / Subtitle
+                                      </label>
+                                      <input 
+                                        type="text"
+                                        value={slide.subtitle}
+                                        onChange={(e) => handleSlideFieldChange(idx, 'subtitle', e.target.value)}
+                                        placeholder="e.g. Made to Last."
+                                        className="w-full border border-espresso/15 p-1.5 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                      />
+                                    </div>
+
+                                    {/* Story / Description */}
+                                    <div>
+                                      <label className="block text-[8px] uppercase tracking-wider font-semibold text-espresso mb-0.5">
+                                        Short Description
+                                      </label>
+                                      <input 
+                                        type="text"
+                                        value={slide.description || ''}
+                                        onChange={(e) => handleSlideFieldChange(idx, 'description', e.target.value)}
+                                        placeholder="e.g. Handpicked minimal earrings & chains..."
+                                        className="w-full border border-espresso/15 p-1.5 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  {/* Call to Actions */}
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-espresso/10">
+                                    <div>
+                                      <label className="block text-[8px] uppercase tracking-wider font-semibold text-espresso mb-0.5">
+                                        Primary Button Text
+                                      </label>
+                                      <input 
+                                        type="text"
+                                        value={slide.ctaText || 'Shop Collection'}
+                                        onChange={(e) => handleSlideFieldChange(idx, 'ctaText', e.target.value)}
+                                        className="w-full border border-espresso/15 p-1 text-[10px] text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-[8px] uppercase tracking-wider font-semibold text-espresso mb-0.5">
+                                        Secondary Button Text
+                                      </label>
+                                      <input 
+                                        type="text"
+                                        value={slide.secondaryCtaText || 'New Arrivals'}
+                                        onChange={(e) => handleSlideFieldChange(idx, 'secondaryCtaText', e.target.value)}
+                                        className="w-full border border-espresso/15 p-1 text-[10px] text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Save Button for Hero Carousel */}
+                        <div className="pt-2">
+                          <button 
+                            type="button"
+                            onClick={() => handleSaveHeroCarousel()}
+                            disabled={heroSaving}
+                            className="py-3 px-8 bg-espresso hover:bg-terracotta text-[#FAF8F6] text-[11px] uppercase tracking-widest font-extrabold shadow-md transition-all flex items-center justify-center space-x-2 cursor-pointer w-full sm:w-auto"
+                          >
+                            {heroSaving ? (
+                              <>
+                                <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                                <span>Saving Hero Carousel to Database...</span>
+                              </>
+                            ) : heroSettingsSaved ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                <span>Hero Carousel Settings Saved Successfully!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="w-3.5 h-3.5 text-linen" />
+                                <span>Save & Publish Festive Hero Carousel</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
 
                       {/* Shop By Category Customizer */}
                       <div className="bg-white border border-espresso/10 p-5 rounded-xs space-y-6 shadow-3xs">
@@ -2353,13 +2945,25 @@ export default function SellerPortal({
                         <form onSubmit={handleSaveCategories} className="space-y-6">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {localCategories.map((cat, idx) => (
-                              <div key={cat.tabId} className="p-3 bg-[#FAF8F6] border border-espresso/10 rounded-xs flex gap-4 items-center relative group">
+                              <div key={cat.tabId} className="p-3.5 bg-[#FAF8F6] border border-espresso/10 rounded-xs flex gap-4 items-start relative group">
                                 {/* Thumbnail Preview */}
-                                <div className="w-20 h-20 shrink-0 aspect-square bg-[#FAF8F6] border border-espresso/10 rounded-xs overflow-hidden relative">
-                                  <img src={cat.imageUrl} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                <div className="w-22 h-22 shrink-0 aspect-square bg-linen/40 border border-espresso/15 rounded-xs overflow-hidden relative shadow-3xs">
+                                  <img 
+                                    src={cat.imageUrl} 
+                                    alt={cat.title}
+                                    className="w-full h-full object-cover" 
+                                    referrerPolicy="no-referrer" 
+                                  />
                                   {catUploadingIdx === idx && (
-                                    <div className="absolute inset-0 bg-espresso/60 flex items-center justify-center">
-                                      <span className="w-2 h-2 bg-terracotta rounded-full animate-ping"></span>
+                                    <div className="absolute inset-0 bg-espresso/70 flex flex-col items-center justify-center p-1 text-center">
+                                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mb-1"></span>
+                                      <span className="text-[7px] uppercase font-bold text-white tracking-widest">Saving...</span>
+                                    </div>
+                                  )}
+                                  {catSavedIdx === idx && (
+                                    <div className="absolute inset-0 bg-emerald-700/85 flex flex-col items-center justify-center p-1 text-center animate-fade-in">
+                                      <Check className="w-4 h-4 text-white mb-0.5" />
+                                      <span className="text-[7px] uppercase font-bold text-white tracking-widest">Saved!</span>
                                     </div>
                                   )}
                                 </div>
@@ -2387,7 +2991,7 @@ export default function SellerPortal({
                                         placeholder="Category Name"
                                         value={cat.title}
                                         onChange={(e) => handleCategoryFieldChange(idx, 'title', e.target.value)}
-                                        className="w-full border border-espresso/15 p-1 text-[10px] text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                        className="w-full border border-espresso/15 p-1.5 text-[10px] text-espresso bg-white focus:border-terracotta focus:outline-hidden"
                                       />
                                     </div>
                                     <div>
@@ -2399,7 +3003,7 @@ export default function SellerPortal({
                                         placeholder="Subtitle (Optional)"
                                         value={cat.subtitle || ''}
                                         onChange={(e) => handleCategoryFieldChange(idx, 'subtitle', e.target.value)}
-                                        className="w-full border border-espresso/15 p-1 text-[10px] text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                        className="w-full border border-espresso/15 p-1.5 text-[10px] text-espresso bg-white focus:border-terracotta focus:outline-hidden"
                                       />
                                     </div>
                                   </div>
@@ -2413,29 +3017,43 @@ export default function SellerPortal({
                                       placeholder="Paste Image URL..."
                                       value={cat.imageUrl}
                                       onChange={(e) => handleCategoryFieldChange(idx, 'imageUrl', e.target.value)}
-                                      className="w-full border border-espresso/15 p-1 text-[10px] text-espresso bg-white focus:border-terracotta focus:outline-hidden"
+                                      className="w-full border border-espresso/15 p-1.5 text-[10px] text-espresso bg-white focus:border-terracotta focus:outline-hidden"
                                     />
                                   </div>
 
                                   {/* File upload for each category */}
-                                  <div className="flex items-center space-x-2 pt-1 border-t border-espresso/5">
-                                    <input 
-                                      type="file" 
-                                      accept="image/*"
-                                      id={`cat-upload-${idx}`}
-                                      className="hidden"
-                                      onChange={(e) => {
-                                        const file = e.target.files?.[0];
-                                        if (file) handleCategoryUpload(idx, file);
-                                      }}
-                                    />
-                                    <label 
-                                      htmlFor={`cat-upload-${idx}`}
-                                      className="px-2 py-0.5 bg-white hover:bg-espresso/5 border border-espresso/20 text-[8px] uppercase tracking-wider font-extrabold text-espresso cursor-pointer transition-colors"
+                                  <div className="flex items-center justify-between pt-1 border-t border-espresso/10">
+                                    <div className="flex items-center space-x-2">
+                                      <input 
+                                        type="file" 
+                                        accept="image/*"
+                                        id={`cat-upload-${idx}`}
+                                        className="hidden"
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0];
+                                          if (file) handleCategoryUpload(idx, file);
+                                        }}
+                                      />
+                                      <label 
+                                        htmlFor={`cat-upload-${idx}`}
+                                        className="px-2.5 py-1 bg-white hover:bg-espresso/5 border border-espresso/25 text-[8px] uppercase tracking-wider font-bold text-espresso cursor-pointer transition-colors shadow-3xs"
+                                      >
+                                        {catUploadingIdx === idx ? 'Uploading & Saving...' : 'Upload Image File'}
+                                      </label>
+                                      {catSavedIdx === idx && (
+                                        <span className="text-[8px] text-emerald-600 font-bold flex items-center gap-0.5">
+                                          <Check className="w-3 h-3" /> Live
+                                        </span>
+                                      )}
+                                    </div>
+                                    
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSaveSingleCategory(idx)}
+                                      className="px-2 py-0.5 text-[8px] uppercase tracking-wider text-espresso/70 hover:text-espresso font-bold hover:bg-espresso/5 rounded-xs transition-colors"
                                     >
-                                      {catUploadingIdx === idx ? 'Uploading...' : 'Upload File'}
-                                    </label>
-                                    <span className="text-[8px] text-taupe">Or upload image</span>
+                                      Save Card
+                                    </button>
                                   </div>
                                 </div>
                               </div>
@@ -2488,7 +3106,7 @@ export default function SellerPortal({
                             </div>
                             
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
-                              <div className="flex items-center space-x-2">
+                              <div className="flex items-center space-x-3">
                                 <input 
                                   type="file" 
                                   accept="image/*"
@@ -2505,7 +3123,12 @@ export default function SellerPortal({
                                 >
                                   {newCatUploading ? 'Uploading...' : 'Upload Image File'}
                                 </label>
-                                <span className="text-[9px] text-taupe font-semibold">Max 1MB, or use the Image URL input</span>
+                                {newCatImg && (
+                                  <div className="flex items-center space-x-2">
+                                    <img src={newCatImg} className="w-7 h-7 object-cover border border-espresso/15 rounded-xs" alt="Preview" />
+                                    <span className="text-[9px] text-emerald-600 font-semibold">Image loaded</span>
+                                  </div>
+                                )}
                               </div>
                               
                               <button
@@ -2525,13 +3148,13 @@ export default function SellerPortal({
                             >
                               {categoriesUpdated ? (
                                 <>
-                                  <Check className="w-3.5 h-3.5" />
+                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
                                   <span>Saved Catalog Settings!</span>
                                 </>
                               ) : (
                                 <>
                                   <RefreshCw className="w-3.5 h-3.5 text-linen" />
-                                  <span>Update Category Settings</span>
+                                  <span>Update All Category Settings</span>
                                 </>
                               )}
                             </button>
