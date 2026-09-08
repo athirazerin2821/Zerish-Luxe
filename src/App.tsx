@@ -26,13 +26,19 @@ import {
   Award,
   ChevronDown,
   Home,
-  LayoutGrid
+  LayoutGrid,
+  ChevronLeft,
+  ChevronRight,
+  Share2,
+  QrCode,
+  CreditCard
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 // Data and Types
-import { Product, CartItem, Order, Coupon, OrderDetails, Testimonial, UserAccount, CategorySetting, InstagramPost } from './types';
-import { INITIAL_PRODUCTS, TESTIMONIALS } from './data';
+import { Product, CartItem, Order, Coupon, OrderDetails, Testimonial, UserAccount, CategorySetting, InstagramPost, HeroSlide, HeroCarouselSettings } from './types';
+import { INITIAL_PRODUCTS, TESTIMONIALS, DEFAULT_HERO_SLIDES } from './data';
+import { shareProductToWhatsApp } from './utils/shareUtils';
 
 // Firebase Services
 import { auth } from './firebase';
@@ -63,6 +69,10 @@ import {
   getInstagramPosts,
   addInstagramPost,
   deleteInstagramPost,
+  getHeroCarouselSettings,
+  updateHeroCarouselSettings,
+  getStorePaymentQr,
+  updateStorePaymentQr,
   DEFAULT_CATEGORIES
 } from './services/firebaseDb';
 
@@ -75,45 +85,15 @@ import TermsConditionsModal from './components/TermsConditionsModal';
 import { SearchDrawer, WishlistDrawer, AccountDrawer } from './components/Drawers';
 import ProductModal from './components/ProductModal';
 import SellerPortal from './components/SellerPortal';
-// @ts-ignore
-import heroImage from './assets/images/zerish_luxe_hero_1783332542018.jpg';
-// @ts-ignore
-import antiTarnishJewelryImg from './assets/images/anti_tarnish_jewelry_1783515904907.jpg';
-// @ts-ignore
-import modelWearingJewelryImg from './assets/images/elegance_jewelry_model_1783579675029.jpg';
-// @ts-ignore
-import outstandingJewelryModelImg from './assets/images/outstanding_jewelry_model_1783580377732.jpg';
-// @ts-ignore
-import beautifulMinimalJewelryImg from './assets/images/beautiful_minimal_jewelry_1783580876040.jpg';
-// @ts-ignore
-import jewelryWithFlowersImg from './assets/images/jewelry_with_flowers_1783581030429.jpg';
-// @ts-ignore
-import goldJewelrySatinFlowersImg from './assets/images/gold_jewelry_satin_flowers_1783581310352.jpg';
-// @ts-ignore
-import editorialEmeraldJewelryModelImg from './assets/images/editorial_emerald_jewelry_model_1783753450701.jpg';
-// @ts-ignore
-import jewelryCuffsModelImg from './assets/images/jewelry_cuffs_model_1783753646780.jpg';
-// @ts-ignore
-import modestModelRightGoldJewelryImg from './assets/images/modest_model_right_gold_jewelry_1783755207971.jpg';
-// @ts-ignore
-import highQualityModestJewelryModelImg from './assets/images/high_quality_modest_jewelry_model_1783755409802.jpg';
-// @ts-ignore
-import modestOpenHairModelJewelryImg from './assets/images/modest_open_hair_model_jewelry_1783755798891.jpg';
-// @ts-ignore
-import luxuryJewelryModestBannerImg from './assets/images/luxury_jewelry_modest_banner_1783756629266.jpg';
-// @ts-ignore
-import luxuryJewelryModestBannerV2Img from './assets/images/luxury_jewelry_modest_banner_v2_1783756827703.jpg';
-// @ts-ignore
-import luxuryJewelryVNeckBannerImg from './assets/images/luxury_jewelry_v_neck_banner_1783756960523.jpg';
-// @ts-ignore
-import luxuryVneckAdCuffBannerImg from './assets/images/luxury_vneck_ad_cuff_banner_1783757089887.jpg';
-
+import PaymentQRCode from './components/PaymentQRCode';
+import ScanAndPayModal from './components/ScanAndPayModal';
+import OrderDetailsModal from './components/OrderDetailsModal';
 const HERO_VIDEO_URL = 'https://assets.mixkit.co/videos/preview/mixkit-beautiful-girl-wearing-jewelry-40545-large.mp4';
 
 const HERO_FRAMES = [
-  luxuryVneckAdCuffBannerImg,
-  luxuryJewelryVNeckBannerImg,
-  luxuryJewelryModestBannerV2Img,
+  'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?q=80&w=2400&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?q=80&w=2400&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1611591475155-4286fa2c2e74?q=80&w=2400&auto=format&fit=crop',
 ];
 
 function safeSetItem(key: string, value: string) {
@@ -300,6 +280,23 @@ export default function App() {
     }
   });
 
+  const [heroCarouselSettings, setHeroCarouselSettings] = useState<HeroCarouselSettings>(() => {
+    const saved = localStorage.getItem('zl_hero_carousel');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && Array.isArray(parsed.slides) && parsed.slides.length > 0) {
+          return parsed;
+        }
+      } catch (e) {}
+    }
+    return {
+      slides: DEFAULT_HERO_SLIDES,
+      autoPlayIntervalSeconds: 6,
+      activeFestiveTheme: 'classic'
+    };
+  });
+
   useEffect(() => {
     safeSetItem('zl_reviews', JSON.stringify(reviews));
   }, [reviews]);
@@ -311,6 +308,20 @@ export default function App() {
   useEffect(() => {
     safeSetItem('zl_categories', JSON.stringify(categories));
   }, [categories]);
+
+  useEffect(() => {
+    safeSetItem('zl_hero_carousel', JSON.stringify(heroCarouselSettings));
+  }, [heroCarouselSettings]);
+
+  useEffect(() => {
+    const slidesCount = heroCarouselSettings?.slides?.length || 1;
+    if (slidesCount <= 1) return;
+    const intervalMs = (heroCarouselSettings.autoPlayIntervalSeconds || 6) * 1000;
+    const timer = setInterval(() => {
+      setCurrentFrame(prev => (prev + 1) % slidesCount);
+    }, intervalMs);
+    return () => clearInterval(timer);
+  }, [heroCarouselSettings]);
 
   // --- UI TRIGGERS ---
   const [activeTab, setActiveTab] = useState<
@@ -401,6 +412,18 @@ export default function App() {
           setInstagramPosts(validPosts);
         }
       }).catch(err => console.error('Firestore getInstagramPosts error:', err));
+
+      getHeroCarouselSettings().then((settings) => {
+        if (settings && Array.isArray(settings.slides) && settings.slides.length > 0) {
+          setHeroCarouselSettings(settings);
+        }
+      }).catch(err => console.error('Firestore getHeroCarouselSettings error:', err));
+
+      getStorePaymentQr().then((qr) => {
+        if (qr) {
+          setStorePaymentQr(qr);
+        }
+      }).catch(err => console.error('Firestore getStorePaymentQr error:', err));
     });
   }, []);
 
@@ -481,9 +504,38 @@ export default function App() {
 
   // --- CHECKOUT PROCESS ---
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [isScanAndPayOpen, setIsScanAndPayOpen] = useState(false);
+  const [selectedOrderForDetails, setSelectedOrderForDetails] = useState<Order | null>(null);
+  const paymentMethod: 'UPI_QR' = 'UPI_QR';
+  const [paymentStep, setPaymentStep] = useState<'shipping' | 'qr_payment' | 'success'>('shipping');
+  const [pendingOrder, setPendingOrder] = useState<Order | null>(null);
+  const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
+  const [storePaymentQr, setStorePaymentQr] = useState<string>(() => {
+    try {
+      return localStorage.getItem('zerish_custom_qr_code') || '';
+    } catch {
+      return '';
+    }
+  });
+
+  useEffect(() => {
+    const handleQrUpdate = () => {
+      try {
+        const qr = localStorage.getItem('zerish_custom_qr_code') || '';
+        setStorePaymentQr(qr);
+      } catch {
+        // ignore
+      }
+    };
+    window.addEventListener('custom_qr_code_updated', handleQrUpdate);
+    return () => window.removeEventListener('custom_qr_code_updated', handleQrUpdate);
+  }, []);
+
   const [checkoutDetails, setCheckoutDetails] = useState<OrderDetails>({
     customerName: '',
     phoneNumber: '',
+    email: '',
+    address: '',
     city: '',
     postalCode: '',
     state: ''
@@ -509,6 +561,8 @@ export default function App() {
       setCheckoutDetails({
         customerName: currentUser.name,
         phoneNumber: currentUser.phoneNumber,
+        email: currentUser.email || '',
+        address: '',
         city: currentUser.city,
         state: currentUser.state,
         postalCode: currentUser.postalCode
@@ -518,6 +572,8 @@ export default function App() {
       setCheckoutDetails({
         customerName: '',
         phoneNumber: '',
+        email: '',
+        address: '',
         city: '',
         state: '',
         postalCode: ''
@@ -674,9 +730,20 @@ export default function App() {
 
   const handleCheckoutSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!checkoutDetails.customerName.trim() || !checkoutDetails.phoneNumber.trim()) return;
+    if (
+      !checkoutDetails.customerName.trim() || 
+      !checkoutDetails.phoneNumber.trim() || 
+      !checkoutDetails.address?.trim() || 
+      !checkoutDetails.city.trim() || 
+      !checkoutDetails.state.trim() || 
+      !checkoutDetails.postalCode.trim()
+    ) {
+      alert('Please fill in all customer delivery details (Name, Phone, Address, City, State, and Pincode).');
+      return;
+    }
 
     if (/[^\d]/.test(checkoutDetails.phoneNumber) || /[^\d]/.test(checkoutDetails.postalCode)) {
+      alert('Phone number and postal code must contain digits only.');
       return;
     }
 
@@ -684,6 +751,7 @@ export default function App() {
       const guestAccount: UserAccount = {
         name: checkoutDetails.customerName.trim(),
         phoneNumber: checkoutDetails.phoneNumber.trim(),
+        email: checkoutDetails.email?.trim(),
         city: checkoutDetails.city.trim(),
         state: checkoutDetails.state.trim(),
         postalCode: checkoutDetails.postalCode.trim(),
@@ -707,80 +775,88 @@ export default function App() {
     const newOrderId = `ZL-${Math.floor(1000 + Math.random() * 9000)}`;
     const newOrder: Order = {
       id: newOrderId,
-      customerName: checkoutDetails.customerName,
-      phoneNumber: checkoutDetails.phoneNumber,
-      city: checkoutDetails.city,
-      state: checkoutDetails.state,
-      postalCode: checkoutDetails.postalCode,
+      customerName: checkoutDetails.customerName.trim(),
+      phoneNumber: checkoutDetails.phoneNumber.trim(),
+      email: checkoutDetails.email?.trim(),
+      address: checkoutDetails.address?.trim(),
+      city: checkoutDetails.city.trim(),
+      state: checkoutDetails.state.trim(),
+      postalCode: checkoutDetails.postalCode.trim(),
       items: [...cart],
       total: finalTotal,
       discount,
       couponApplied: appliedCoupon?.code,
       status: 'Pending',
       date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      trackingNumber: trackingCode
+      trackingNumber: trackingCode,
+      isPaid: false,
+      paymentMethod: 'UPI_QR'
     };
 
-    // Construct detailed WhatsApp message containing products and order info
-    const itemsText = cart.map(item => `- ${item.product.name} x ${item.quantity} (₹${item.product.price.toLocaleString('en-IN')})`).join('\n');
-    const couponText = appliedCoupon ? `\n*Coupon Code:* ${appliedCoupon.code} (-₹${discount.toLocaleString('en-IN')})` : '';
-    const shippingText = isFreeShipping ? 'FREE' : `₹${shippingFee}`;
-    
-    const whatsappMessage = `Hi Zerish Luxe! I just submitted a jewelry enquiry list on your website.\n\n` +
-      `*Enquiry ID:* ${newOrderId}\n` +
-      `*Tracking Code:* ${trackingCode}\n` +
-      `*Customer Name:* ${checkoutDetails.customerName}\n` +
-      `*Phone:* ${checkoutDetails.phoneNumber}\n` +
-      `*Location:* ${checkoutDetails.city}, ${checkoutDetails.state}\n` +
-      `*Pincode:* ${checkoutDetails.postalCode}\n\n` +
-      `*Enquiry Items:*\n${itemsText}\n\n` +
-      `*Estimated Value:* ₹${subtotal.toLocaleString('en-IN')}${couponText}\n` +
-      `*Shipping:* ${shippingText}\n` +
-      `*Total Enquiry Value:* ₹${finalTotal.toLocaleString('en-IN')}\n\n` +
-      `Please contact me regarding pricing and customization of my curated pieces!`;
+    setPendingOrder(newOrder);
+    setPaymentStep('qr_payment');
+  };
 
-    const whatsappUrl = `https://wa.me/919916026262?text=${encodeURIComponent(whatsappMessage)}`;
-    setLastWhatsappUrl(whatsappUrl);
+  const finalizeOrder = (orderToSave: Order, isPaid: boolean, txnRef?: string) => {
+    const finalOrder: Order = {
+      ...orderToSave,
+      isPaid,
+      upiTransactionRef: txnRef || orderToSave.upiTransactionRef
+    };
 
-    // Auto-open WhatsApp in a new tab/window, or fall back to current tab if popup is blocked
-    try {
-      const newWin = window.open(whatsappUrl, '_blank');
-      if (!newWin || newWin.closed || typeof newWin.closed === 'undefined') {
-        window.location.href = whatsappUrl;
-      }
-    } catch (e) {
-      window.location.href = whatsappUrl;
-    }
-
-    // Update stocks
+    // Update product stock counts
     setProducts(prev => prev.map(p => {
-      const cartItem = cart.find(item => item.product.id === p.id);
+      const cartItem = finalOrder.items.find(item => item.product.id === p.id);
       if (cartItem) {
         return { ...p, stock: Math.max(0, (p.stock || 15) - cartItem.quantity) };
       }
       return p;
     }));
 
-    // Save order to Firestore
-    createOrder(newOrder).catch(err => console.error('Error creating order in Firestore:', err));
+    // Save order in Firestore
+    createOrder(finalOrder).catch(err => console.error('Error creating order in Firestore:', err));
 
     // Save customer/guest details to Firestore
     const customerToSave: UserAccount = currentUser || {
-      name: checkoutDetails.customerName.trim(),
-      phoneNumber: checkoutDetails.phoneNumber.trim(),
-      city: checkoutDetails.city.trim(),
-      state: checkoutDetails.state.trim(),
-      postalCode: checkoutDetails.postalCode.trim(),
+      name: finalOrder.customerName,
+      phoneNumber: finalOrder.phoneNumber,
+      email: finalOrder.email,
+      city: finalOrder.city,
+      state: finalOrder.state,
+      postalCode: finalOrder.postalCode,
       joinDate: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
     };
     saveCustomer(customerToSave).catch(err => console.error('Error saving customer data:', err));
 
-    setOrders(prev => [newOrder, ...prev]);
+    // Construct detailed WhatsApp message
+    const itemsText = finalOrder.items.map(item => `- ${item.product.name} x ${item.quantity} (₹${item.product.price.toLocaleString('en-IN')})`).join('\n');
+    const paymentStatusText = isPaid 
+      ? `PAID via UPI QR (Ref: ${txnRef || 'UPI-APP-CONFIRMED'})` 
+      : 'Payment Verification Pending';
+
+    const whatsappMessage = `Hi Zerish Luxe! I just placed an order on your website.\n\n` +
+      `*Order ID:* ${finalOrder.id}\n` +
+      `*Tracking Code:* ${finalOrder.trackingNumber}\n` +
+      `*Customer Name:* ${finalOrder.customerName}\n` +
+      `*Phone:* ${finalOrder.phoneNumber}\n` +
+      `*Delivery Address:* ${finalOrder.address ? finalOrder.address + ', ' : ''}${finalOrder.city}, ${finalOrder.state} - ${finalOrder.postalCode}\n\n` +
+      `*Payment Method:* Instant UPI QR Code\n` +
+      `*Payment Status:* ${paymentStatusText}\n\n` +
+      `*Ordered Items:*\n${itemsText}\n\n` +
+      `*Total Amount:* ₹${finalOrder.total.toLocaleString('en-IN')}\n\n` +
+      `Please confirm receipt of payment and order dispatch details!`;
+
+    const whatsappUrl = `https://wa.me/919916026262?text=${encodeURIComponent(whatsappMessage)}`;
+    setLastWhatsappUrl(whatsappUrl);
+
+    setOrders(prev => [finalOrder, ...prev]);
+    setConfirmedOrder(finalOrder);
     setCart([]);
     setAppliedCoupon(null);
     setCouponInput('');
-    setLastOrderTotal(finalTotal);
-    setCheckoutSuccess(trackingCode);
+    setLastOrderTotal(finalOrder.total);
+    setCheckoutSuccess(finalOrder.trackingNumber);
+    setPaymentStep('success');
   };
 
   const handleAddProduct = async (newProduct: Omit<Product, 'id'>): Promise<void> => {
@@ -1172,11 +1248,22 @@ export default function App() {
           setHeroText(newText);
           updateHeroTextInDb(newText.title, newText.subtitle).catch(err => console.error('Error updating hero text in Firestore:', err));
         }}
+        heroCarouselSettings={heroCarouselSettings}
+        onUpdateHeroCarouselSettings={async (newSettings) => {
+          setHeroCarouselSettings(newSettings);
+          safeSetItem('zl_hero_carousel', JSON.stringify(newSettings));
+          try {
+            await updateHeroCarouselSettings(newSettings);
+          } catch (err) {
+            console.error('Error updating hero carousel in Firestore:', err);
+          }
+        }}
         reviews={reviews}
         onDeleteReview={handleDeleteReview}
         categories={categories}
         onUpdateCategories={async (newCats) => {
           setCategories(newCats);
+          safeSetItem('zl_categories', JSON.stringify(newCats));
           try {
             await updateCategories(newCats);
           } catch (err) {
@@ -1186,6 +1273,15 @@ export default function App() {
         instagramPosts={instagramPosts}
         onAddInstagramPost={handleAddInstagramPost}
         onDeleteInstagramPost={handleDeleteInstagramPost}
+        storePaymentQr={storePaymentQr}
+        onUpdateStorePaymentQr={async (newQr) => {
+          setStorePaymentQr(newQr);
+          try {
+            await updateStorePaymentQr(newQr);
+          } catch (err) {
+            console.error('Error updating store payment QR in Firestore:', err);
+          }
+        }}
       />
     );
   }
@@ -1306,7 +1402,7 @@ export default function App() {
                 <User className="w-4.5 h-4.5" />
               </button>
               
-              <button onClick={() => setIsCartOpen(true)} className="p-1 hover:text-terracotta transition-colors relative cursor-pointer" title="Enquiry Bag">
+              <button onClick={() => setIsCartOpen(true)} className="p-1 hover:text-terracotta transition-colors relative cursor-pointer" title="Shopping Bag & Cart">
                 <ShoppingBag className="w-4.5 h-4.5" />
                 {cart.length > 0 && (
                   <span className="absolute -top-1 -right-1 bg-espresso text-white text-[8px] font-extrabold w-3.5 h-3.5 rounded-full flex items-center justify-center">
@@ -1324,129 +1420,178 @@ export default function App() {
       </header>
 
       {/* ======================================================== */}
-      {/* --- LUXURY HERO LANDING SECTION WITH DOT NAVIGATION --- */}
+      {/* --- LUXURY HERO LANDING SECTION WITH FESTIVE CAROUSEL --- */}
       {/* ======================================================== */}
-      <section className="relative flex flex-col lg:flex-row lg:items-center min-h-0 lg:h-[calc(100vh-100px)] overflow-hidden bg-[#FAF8F6] border-b border-espresso/5">
-        
-        {/* Background Frames with premium cross-fade transition */}
-        <div className="relative lg:absolute w-full h-64 sm:h-80 md:h-96 lg:h-full lg:inset-0 z-0 shrink-0 overflow-hidden">
-          {HERO_FRAMES.map((src, idx) => (
-            <img 
-              key={idx}
-              src={src} 
-              alt={`Luxury gold jewelry frame ${idx + 1}`}
-              className={`absolute inset-0 w-full h-full object-cover object-center lg:object-right transition-opacity duration-[1200ms] ease-in-out ${
-                currentFrame === idx ? 'opacity-100 scale-100' : 'opacity-0 scale-105 pointer-events-none'
-              }`}
-              style={{ transitionProperty: 'opacity, transform' }}
-              referrerPolicy="no-referrer"
-            />
-          ))}
-          {/* Soft premium ambient overlay to ensure beautiful contrast */}
-          <div className="absolute inset-0 bg-white/10 lg:bg-transparent z-[1]" />
+      {(() => {
+        const slides = heroCarouselSettings?.slides && heroCarouselSettings.slides.length > 0 
+          ? heroCarouselSettings.slides 
+          : DEFAULT_HERO_SLIDES;
+        const safeIdx = currentFrame < slides.length ? currentFrame : 0;
+        const currentSlide = slides[safeIdx] || slides[0];
 
-          {/* Slide Indicator Dots - nested inside the image block for perfect alignment on mobile and desktop */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center space-x-3 bg-white/70 backdrop-blur-md px-4 py-2 rounded-full border border-espresso/10 shadow-sm">
-            {HERO_FRAMES.map((_, idx) => (
-              <button
-                key={idx}
-                onClick={() => setCurrentFrame(idx)}
-                className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                  currentFrame === idx 
-                    ? 'bg-terracotta w-5' 
-                    : 'bg-espresso/30 hover:bg-espresso/60'
-                }`}
-                aria-label={`Go to slide ${idx + 1}`}
-                title={`View slide ${idx + 1}`}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Content Overlay */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full py-8 sm:py-12 lg:py-24">
-          <div className="max-w-xl space-y-6 sm:space-y-8 bg-transparent p-2 sm:p-0 rounded-none border-none shadow-none">
+        return (
+          <section className="relative flex flex-col lg:flex-row lg:items-center min-h-0 lg:h-[calc(100vh-100px)] overflow-hidden bg-[#FAF8F6] border-b border-espresso/5">
             
+            {/* Background Frames with premium cross-fade transition */}
+            <div className="relative lg:absolute w-full h-72 sm:h-88 md:h-96 lg:h-full lg:inset-0 z-0 shrink-0 overflow-hidden">
+              {slides.map((slide, idx) => (
+                <img 
+                  key={slide.id || idx}
+                  src={slide.imageUrl} 
+                  alt={slide.title || `Luxury gold jewelry slide ${idx + 1}`}
+                  className={`absolute inset-0 w-full h-full object-cover object-center lg:object-right transition-opacity duration-[1000ms] ease-in-out ${
+                    safeIdx === idx ? 'opacity-100 scale-100' : 'opacity-0 scale-105 pointer-events-none'
+                  }`}
+                  style={{ transitionProperty: 'opacity, transform' }}
+                  referrerPolicy="no-referrer"
+                />
+              ))}
+              {/* Soft ambient overlay */}
+              <div className="absolute inset-0 bg-gradient-to-t from-[#FAF8F6] via-transparent to-transparent lg:bg-transparent z-[1]" />
 
+              {/* Next / Previous arrows on desktop/tablet */}
+              {slides.length > 1 && (
+                <>
+                  <button
+                    onClick={() => setCurrentFrame(prev => (prev - 1 + slides.length) % slides.length)}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 z-20 p-2.5 rounded-full bg-white/80 hover:bg-white text-espresso backdrop-blur-md transition-all shadow-md hidden sm:flex items-center justify-center cursor-pointer hover:scale-110"
+                    title="Previous festive slide"
+                    aria-label="Previous slide"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setCurrentFrame(prev => (prev + 1) % slides.length)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 z-20 p-2.5 rounded-full bg-white/80 hover:bg-white text-espresso backdrop-blur-md transition-all shadow-md hidden sm:flex items-center justify-center cursor-pointer hover:scale-110"
+                    title="Next festive slide"
+                    aria-label="Next slide"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </>
+              )}
 
-            <h1 className="font-serif text-4xl sm:text-6xl font-light text-espresso leading-none tracking-tight">
-              Minimal. Timeless.
-              <span className="block italic text-terracotta font-normal mt-2">Made to Last.</span>
-            </h1>
-
-            <div className="flex items-center space-x-3 text-terracotta">
-              <div className="h-[0.5px] w-12 bg-terracotta/40"></div>
-              <span className="text-xs">✦</span>
-              <div className="h-[0.5px] w-12 bg-terracotta/40"></div>
+              {/* Slide Indicator Dots */}
+              {slides.length > 1 && (
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center space-x-2.5 bg-white/85 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-espresso/10 shadow-sm">
+                  {slides.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentFrame(idx)}
+                      className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
+                        safeIdx === idx 
+                          ? 'bg-terracotta w-6' 
+                          : 'bg-espresso/30 hover:bg-espresso/60 w-2'
+                      }`}
+                      aria-label={`Go to slide ${idx + 1}`}
+                      title={`View slide ${idx + 1}`}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
 
-            <p className="text-sm text-espresso/90 leading-relaxed font-sans max-w-sm font-medium">
-              Handpicked minimal earrings & chains that stay with you every moment, every day. 100% waterproof, sweatproof and anti-tarnish designed for modern elegance.
-            </p>
+            {/* Content Overlay */}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full py-8 sm:py-12 lg:py-24">
+              <div className="max-w-xl space-y-5 sm:space-y-7 bg-transparent p-2 sm:p-0 rounded-none border-none shadow-none">
+                <motion.h1 
+                  key={`title-${currentSlide.id || safeIdx}`}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.35 }}
+                  className="font-serif text-4xl sm:text-6xl font-light text-espresso leading-none tracking-tight"
+                >
+                  {currentSlide.title || heroText.title}
+                  {currentSlide.subtitle && (
+                    <span className="block italic text-terracotta font-normal mt-2">
+                      {currentSlide.subtitle}
+                    </span>
+                  )}
+                </motion.h1>
 
-            {/* CTA Keys */}
-            <div className="flex flex-col sm:flex-row gap-4 pt-2">
-              <a 
-                href="#shop" 
-                onClick={() => {
-                  setActiveTab('best-sellers');
-                  const el = document.getElementById('shop');
-                  el?.scrollIntoView({ behavior: 'smooth' });
-                }}
-                className="px-8 py-4 bg-terracotta text-white hover:bg-espresso text-[11px] uppercase tracking-[0.2em] font-bold text-center transition-all cursor-pointer hover:scale-[1.02] active:scale-95 duration-200"
-              >
-                Shop Collection
-              </a>
-              <a 
-                href="#shop" 
-                onClick={() => {
-                  setActiveTab('new-arrivals');
-                  const el = document.getElementById('shop');
-                  el?.scrollIntoView({ behavior: 'smooth' });
-                }}
-                className="px-8 py-4 border border-terracotta text-terracotta hover:bg-terracotta hover:text-white text-[11px] uppercase tracking-[0.2em] font-bold text-center transition-all bg-white/40 cursor-pointer hover:scale-[1.02] active:scale-95 duration-200"
-              >
-                New Arrivals
-              </a>
+                <div className="flex items-center space-x-3 text-terracotta">
+                  <div className="h-[0.5px] w-12 bg-terracotta/40"></div>
+                  <span className="text-xs">✦</span>
+                  <div className="h-[0.5px] w-12 bg-terracotta/40"></div>
+                </div>
+
+                <motion.p 
+                  key={`desc-${currentSlide.id || safeIdx}`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.35, delay: 0.05 }}
+                  className="text-sm text-espresso/90 leading-relaxed font-sans max-w-sm font-medium"
+                >
+                  {currentSlide.description || 'Handpicked minimal earrings & chains that stay with you every moment, every day. 100% waterproof, sweatproof and anti-tarnish designed for modern elegance.'}
+                </motion.p>
+
+                {/* CTA Keys */}
+                <div className="flex flex-col sm:flex-row gap-4 pt-2">
+                  <a 
+                    href="#shop" 
+                    onClick={() => {
+                      setActiveTab((currentSlide.ctaTab as any) || 'best-sellers');
+                      const el = document.getElementById('shop');
+                      el?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    className="px-8 py-4 bg-terracotta text-white hover:bg-espresso text-[11px] uppercase tracking-[0.2em] font-bold text-center transition-all cursor-pointer hover:scale-[1.02] active:scale-95 duration-200"
+                  >
+                    {currentSlide.ctaText || 'Shop Collection'}
+                  </a>
+                  {currentSlide.secondaryCtaText && (
+                    <a 
+                      href="#shop" 
+                      onClick={() => {
+                        setActiveTab((currentSlide.secondaryCtaTab as any) || 'new-arrivals');
+                        const el = document.getElementById('shop');
+                        el?.scrollIntoView({ behavior: 'smooth' });
+                      }}
+                      className="px-8 py-4 border border-terracotta text-terracotta hover:bg-terracotta hover:text-white text-[11px] uppercase tracking-[0.2em] font-bold text-center transition-all bg-white/40 cursor-pointer hover:scale-[1.02] active:scale-95 duration-200"
+                    >
+                      {currentSlide.secondaryCtaText}
+                    </a>
+                  )}
+                </div>
+
+                {/* 3 Inline Trust Items */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-espresso/15 text-espresso pt-6">
+                  <div className="flex items-center space-x-2.5">
+                    <div className="text-terracotta">
+                      <Droplet className="w-5 h-5 stroke-[1.5]" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-extrabold uppercase tracking-widest leading-none">Tarnish Resistant</p>
+                      <p className="text-[8px] text-taupe uppercase font-bold mt-1">Premium Quality</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2.5">
+                    <div className="text-terracotta">
+                      <ShieldCheck className="w-5 h-5 stroke-[1.5]" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-extrabold uppercase tracking-widest leading-none">Long Lasting</p>
+                      <p className="text-[8px] text-taupe uppercase font-bold mt-1">Made to Stay</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2.5">
+                    <div className="text-terracotta">
+                      <Heart className="w-5 h-5 stroke-[1.5]" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-extrabold uppercase tracking-widest leading-none">Handpicked</p>
+                      <p className="text-[8px] text-taupe uppercase font-bold mt-1">With Love</p>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
             </div>
 
-            {/* 3 Inline Trust Items */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-espresso/15 text-espresso pt-6">
-              <div className="flex items-center space-x-2.5">
-                <div className="text-terracotta">
-                  <Droplet className="w-5 h-5 stroke-[1.5]" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-extrabold uppercase tracking-widest leading-none">Tarnish Resistant</p>
-                  <p className="text-[8px] text-taupe uppercase font-bold mt-1">Premium Quality</p>
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-2.5">
-                <div className="text-terracotta">
-                  <ShieldCheck className="w-5 h-5 stroke-[1.5]" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-extrabold uppercase tracking-widest leading-none">Long Lasting</p>
-                  <p className="text-[8px] text-taupe uppercase font-bold mt-1">Made to Stay</p>
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-2.5">
-                <div className="text-terracotta">
-                  <Heart className="w-5 h-5 stroke-[1.5]" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-extrabold uppercase tracking-widest leading-none">Handpicked</p>
-                  <p className="text-[8px] text-taupe uppercase font-bold mt-1">With Love</p>
-                </div>
-              </div>
-            </div>
-
-          </div>
-        </div>
-
-      </section>
+          </section>
+        );
+      })()}
 
       {/* ======================================================== */}
       {/* --- SHOP BY CATEGORY (VISUAL GRID FROM IMAGE) --- */}
@@ -1698,18 +1843,6 @@ export default function App() {
                         )}
                       </div>
 
-                      {/* Heart Wishlist button */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleToggleWishlist(p.id);
-                        }}
-                        className="absolute top-2 right-2 p-1.5 rounded-full bg-white/95 text-espresso hover:text-rose-500 hover:scale-105 transition-all shadow-2xs"
-                        title="Save to Wishlist"
-                      >
-                        <Heart className={`w-3.5 h-3.5 ${inFav ? 'fill-rose-500 text-rose-500' : ''}`} />
-                      </button>
-
                       {/* Quick view panel reveal */}
                       <div className="absolute inset-x-0 bottom-0 bg-espresso/70 backdrop-blur-xs py-2 text-center text-white text-[9px] uppercase tracking-widest font-extrabold opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center space-x-1">
                         <Eye className="w-3 h-3" />
@@ -1758,18 +1891,48 @@ export default function App() {
                         </p>
                       )}
 
-                      {/* Button Action */}
-                      <button
-                        onClick={() => handleAddToCart(p)}
-                        disabled={isOutOfStock}
-                        className={`w-full py-2 uppercase tracking-widest text-[9px] font-extrabold transition-all border ${
-                          isOutOfStock
-                            ? 'bg-espresso/5 text-espresso/35 border-espresso/5 cursor-not-allowed'
-                            : 'bg-[#FAF8F6] border-espresso text-espresso hover:bg-espresso hover:text-white hover:scale-[1.01] cursor-pointer'
-                        }`}
-                      >
-                        {isOutOfStock ? 'Sold Out' : 'Add to Enquiry'}
-                      </button>
+                      {/* Amazon-Style Action Bar: Wishlist + WhatsApp Share + Add to Enquiry */}
+                      <div className="flex items-center space-x-1.5 pt-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleWishlist(p.id);
+                          }}
+                          className={`p-2 rounded-xs border transition-all cursor-pointer flex items-center justify-center ${
+                            inFav 
+                              ? 'bg-rose-50 border-rose-200 text-rose-600 shadow-2xs' 
+                              : 'bg-white border-espresso/15 text-espresso/70 hover:text-rose-500 hover:border-rose-300'
+                          }`}
+                          title={inFav ? "Saved in Wishlist" : "Add to Wishlist"}
+                          aria-label="Wishlist"
+                        >
+                          <Heart className={`w-3.5 h-3.5 ${inFav ? 'fill-rose-500 text-rose-500' : ''}`} />
+                        </button>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            shareProductToWhatsApp(p);
+                          }}
+                          className="p-2 rounded-xs border border-emerald-200 bg-emerald-50/70 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300 transition-all cursor-pointer flex items-center justify-center"
+                          title="Share Product on WhatsApp"
+                          aria-label="Share on WhatsApp"
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          onClick={() => handleAddToCart(p)}
+                          disabled={isOutOfStock}
+                          className={`flex-1 py-2 uppercase tracking-widest text-[9px] font-extrabold transition-all border rounded-xs ${
+                            isOutOfStock
+                              ? 'bg-espresso/5 text-espresso/35 border-espresso/5 cursor-not-allowed'
+                              : 'bg-[#FAF8F6] border-espresso text-espresso hover:bg-espresso hover:text-white hover:scale-[1.01] cursor-pointer'
+                          }`}
+                        >
+                          {isOutOfStock ? 'Sold Out' : 'Add to Cart'}
+                        </button>
+                      </div>
 
                     </div>
                   </motion.div>
@@ -1800,7 +1963,7 @@ export default function App() {
               {/* Primary Image Frame (Gold jewelry with delicate flowers representing style & durability) */}
               <div className="relative group overflow-hidden border border-espresso/10 p-2.5 bg-white shadow-md">
                 <img 
-                  src={goldJewelrySatinFlowersImg} 
+                  src="https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?q=80&w=1200&auto=format&fit=crop" 
                   alt="Gold jewelry with delicate flowers representing style and durability" 
                   className="w-full h-[320px] sm:h-[420px] object-cover transition-transform duration-700 group-hover:scale-105"
                   referrerPolicy="no-referrer"
@@ -2209,7 +2372,7 @@ export default function App() {
             </div>
 
             <div>
-              <label className="block text-[9px] uppercase tracking-wider font-semibold text-espresso mb-1">Enquiry Message</label>
+              <label className="block text-[9px] uppercase tracking-wider font-semibold text-espresso mb-1">Your Message</label>
               <textarea 
                 required
                 rows={4}
@@ -2236,7 +2399,7 @@ export default function App() {
 
             {contactSuccess && (
               <div className="p-3.5 bg-emerald-50 text-emerald-800 text-[11px] font-semibold border border-emerald-200">
-                Enquiry dispatched successfully. Opening WhatsApp direct chat...
+                Message dispatched successfully. Opening WhatsApp direct chat...
               </div>
             )}
           </form>
@@ -2262,8 +2425,8 @@ export default function App() {
           <div className="space-y-3">
             <h5 className="text-[10px] uppercase tracking-widest font-extrabold text-[#FAF8F6]">Customer Support</h5>
             <ul className="text-xs text-linen/60 space-y-1.5 font-semibold">
-              <li><button onClick={() => setIsTrackOrderOpen(true)} className="hover:text-terracotta transition-colors">Track Enquiry</button></li>
-              <li><a href="#contact" className="hover:text-terracotta transition-colors">Submit Enquiry</a></li>
+              <li><button onClick={() => setIsTrackOrderOpen(true)} className="hover:text-terracotta transition-colors">Track Order</button></li>
+              <li><a href="#contact" className="hover:text-terracotta transition-colors">Customer Care</a></li>
             </ul>
           </div>
 
@@ -2329,9 +2492,9 @@ export default function App() {
                   <div className="px-6 flex items-center justify-between border-b border-espresso/10 pb-4">
                     <h2 className="font-serif text-lg font-semibold text-espresso flex items-center space-x-2">
                       <ShoppingBag className="w-4.5 h-4.5 text-terracotta" />
-                      <span>My Enquiry Bag ({cart.reduce((sum, it) => sum + it.quantity, 0)})</span>
+                      <span>Shopping Bag & Cart ({cart.reduce((sum, it) => sum + it.quantity, 0)})</span>
                     </h2>
-                    <button onClick={() => setIsCartOpen(false)} className="p-1 rounded-full text-espresso hover:bg-espresso hover:text-white transition-colors">
+                    <button onClick={() => setIsCartOpen(false)} className="p-1 rounded-full text-espresso hover:bg-espresso hover:text-white transition-colors cursor-pointer">
                       <X className="w-4 h-4" />
                     </button>
                   </div>
@@ -2435,150 +2598,305 @@ export default function App() {
                     ) : (
                       /* Shipping/Checkout Form Details View */
                       <div className="space-y-4">
-                        <button 
-                          onClick={() => setIsCheckingOut(false)}
-                          className="text-[10px] uppercase text-taupe font-extrabold tracking-wider hover:text-espresso"
-                        >
-                          ← Back to Enquiry Bag
-                        </button>
-
+                        
                         {checkoutSuccess ? (
-                          /* Success Screen + Enquiry Details (No QR Code) */
+                          /* Success Screen + Order Details Modal Trigger */
                           <div className="text-center py-6 space-y-5 bg-[#FAF8F6] p-5 border border-espresso/15 rounded-xs">
-                            <div className="w-12 h-12 bg-terracotta text-white rounded-full flex items-center justify-center mx-auto text-xl font-serif font-bold shadow-xs">
-                              ✦
+                            <div className="w-12 h-12 bg-emerald-600 text-white rounded-full flex items-center justify-center mx-auto text-xl font-serif font-bold shadow-xs">
+                              ✓
                             </div>
                             <div>
-                              <h3 className="font-serif text-lg font-bold text-espresso">Enquiry Registered!</h3>
+                              <h3 className="font-serif text-lg font-bold text-espresso">Order Placed Successfully!</h3>
                               <p className="text-xs text-espresso/80 leading-relaxed max-w-xs mx-auto mt-1">
-                                Thank you for choosing Zerish Luxe. Our anti-tarnish jewelry catalogue is purely for viewing and curation. We have successfully received your enquiry list!
+                                Thank you for shopping with Zerish Luxe. Your order has been placed and received by our fulfillment center.
                               </p>
                             </div>
                             
                             <div className="bg-white p-3 border border-espresso/10 rounded-xs space-y-1">
-                              <p className="text-[9px] uppercase tracking-wider text-taupe">Enquiry Reference Code:</p>
+                              <p className="text-[9px] uppercase tracking-wider text-taupe">Tracking & Order Reference:</p>
                               <p className="font-mono text-sm font-bold text-espresso uppercase tracking-widest">{checkoutSuccess}</p>
                             </div>
 
-                            <div className="bg-emerald-50/50 border border-emerald-200/60 p-4 rounded-xs space-y-3.5 shadow-xs text-left">
-                              <h4 className="font-serif text-xs font-bold text-emerald-800 flex items-center gap-1.5">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                                Enquiry Received Successfully
-                              </h4>
-                              <p className="text-[11px] text-espresso/90 leading-relaxed">
-                                Thank you for showing interest in Zerish Luxe products! We have successfully received your curation selections. We will reach out to you via Call or WhatsApp shortly to provide pricing details and assist with direct procurement.
-                              </p>
+                            {/* Payment Status Pill */}
+                            <div className={`p-3 text-[10px] font-extrabold uppercase tracking-widest text-center border rounded-xs ${
+                              confirmedOrder?.isPaid 
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200/60' 
+                                : 'bg-amber-50 text-amber-800 border-amber-200/60'
+                            }`}>
+                              {confirmedOrder?.isPaid 
+                                ? '✓ Verified UPI Payment Confirmed' 
+                                : '⏳ Payment Verification Pending'}
+                            </div>
 
-                               <a
+                            <div className="space-y-2.5">
+                              {/* Open Full Order Details Modal */}
+                              {confirmedOrder && (
+                                <button
+                                  onClick={() => {
+                                    setSelectedOrderForDetails(confirmedOrder);
+                                  }}
+                                  className="w-full py-3 bg-espresso hover:bg-terracotta text-[#FAF8F6] text-xs uppercase tracking-widest font-extrabold transition-all flex items-center justify-center gap-2 rounded-xs cursor-pointer shadow-sm"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                  <span>View Detailed Order & Receipt</span>
+                                </button>
+                              )}
+
+                              <a
                                 href={lastWhatsappUrl || `https://wa.me/919916026262`}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] uppercase tracking-widest font-extrabold transition-all flex items-center justify-center gap-2"
+                                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] uppercase tracking-widest font-extrabold transition-all flex items-center justify-center gap-2 rounded-xs"
                               >
+                                <MessageCircle className="w-3.5 h-3.5" />
                                 <span>Chat with Curator on WhatsApp</span>
                               </a>
                             </div>
 
                             <p className="text-[9px] text-taupe">
-                              Note: You can lookup this Enquiry Code in the "Track Enquiry" link in the Footer.
+                              Note: You can also track this order anytime via the "Track Order" link in the footer.
                             </p>
 
                             <button
                               onClick={() => {
                                 setIsCheckingOut(false);
                                 setCheckoutSuccess(null);
+                                setPaymentStep('shipping');
+                                setConfirmedOrder(null);
+                                setPendingOrder(null);
                                 setIsCartOpen(false);
                               }}
-                              className="w-full py-2.5 border border-[#C3A6A0] hover:bg-linen/25 text-[#735A55] text-[10px] uppercase tracking-widest font-extrabold"
+                              className="w-full py-2.5 border border-espresso/25 hover:bg-linen/25 text-espresso text-[10px] uppercase tracking-widest font-extrabold rounded-xs cursor-pointer"
                             >
-                              Awesome! Continue Curation
+                              Continue Shopping
                             </button>
                           </div>
-                        ) : (
-                          /* Form details */
-                          <form onSubmit={handleCheckoutSubmit} className="space-y-4">
-                            <h3 className="font-serif text-base font-bold text-espresso border-b border-espresso/15 pb-2">Shipping Information</h3>
-                            
-                            <div className="space-y-3">
-                              <div>
-                                <label className="block text-[9px] uppercase tracking-wider font-semibold text-espresso mb-1">Your Name</label>
-                                <input 
-                                  type="text" 
-                                  required
-                                  placeholder="Enter your full name"
-                                  value={checkoutDetails.customerName}
-                                  onChange={(e) => setCheckoutDetails(prev => ({ ...prev, customerName: e.target.value }))}
-                                  className="w-full border border-espresso/20 p-2 text-xs bg-white focus:outline-hidden focus:border-terracotta"
-                                />
-                              </div>
-
-                              <div>
-                                <label className="block text-[9px] uppercase tracking-wider font-semibold text-espresso mb-1">Phone Number</label>
-                                <input 
-                                  type="tel" 
-                                  required
-                                  placeholder="Enter your phone number"
-                                  value={checkoutDetails.phoneNumber}
-                                  onChange={(e) => setCheckoutDetails(prev => ({ ...prev, phoneNumber: e.target.value }))}
-                                  className="w-full border border-espresso/20 p-2 text-xs bg-white focus:outline-hidden focus:border-terracotta"
-                                />
-                                {/[^\d]/.test(checkoutDetails.phoneNumber) && checkoutDetails.phoneNumber !== '' && (
-                                  <p className="text-[10px] text-rose-600 mt-1 font-semibold">
-                                    Warning: Phone number must contain only numbers. Letters or special characters are not allowed.
-                                  </p>
-                                )}
-                              </div>
-
-                              <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                  <label className="block text-[9px] uppercase tracking-wider font-semibold text-espresso mb-1">State</label>
-                                  <input 
-                                    type="text"
-                                    required
-                                    placeholder="Enter state"
-                                    value={checkoutDetails.state}
-                                    onChange={(e) => setCheckoutDetails(prev => ({ ...prev, state: e.target.value }))}
-                                    className="w-full border border-espresso/20 p-2 text-xs bg-white focus:outline-hidden focus:border-terracotta"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-[9px] uppercase tracking-wider font-semibold text-espresso mb-1">City</label>
-                                  <input 
-                                    type="text"
-                                    required
-                                    placeholder="Enter city"
-                                    value={checkoutDetails.city}
-                                    onChange={(e) => setCheckoutDetails(prev => ({ ...prev, city: e.target.value }))}
-                                    className="w-full border border-espresso/20 p-2 text-xs bg-white focus:outline-hidden focus:border-terracotta"
-                                  />
-                                </div>
-                              </div>
-
-                              <div>
-                                <label className="block text-[9px] uppercase tracking-wider font-semibold text-espresso mb-1">Postal Pincode</label>
-                                <input 
-                                  type="text" 
-                                  required
-                                  placeholder="Enter pincode"
-                                  value={checkoutDetails.postalCode}
-                                  onChange={(e) => setCheckoutDetails(prev => ({ ...prev, postalCode: e.target.value }))}
-                                  className="w-full border border-espresso/20 p-2 text-xs bg-white focus:outline-hidden focus:border-terracotta"
-                                />
-                                {/[^\d]/.test(checkoutDetails.postalCode) && checkoutDetails.postalCode !== '' && (
-                                  <p className="text-[10px] text-rose-600 mt-1 font-semibold">
-                                    Warning: Pincode must contain only numbers. Letters or special characters are not allowed.
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-
+                        ) : paymentStep === 'qr_payment' && pendingOrder ? (
+                          /* Interactive UPI QR Code Payment Step (The Last Step) */
+                          <div className="space-y-4">
                             <button 
-                              type="submit"
-                              className="w-full py-3 bg-espresso text-[#FAF8F6] hover:bg-terracotta text-xs uppercase tracking-widest font-extrabold shadow-md transition-all mt-3"
+                              onClick={() => setPaymentStep('shipping')}
+                              className="text-[10px] uppercase text-taupe font-extrabold tracking-wider hover:text-espresso flex items-center gap-1 cursor-pointer"
                             >
-                              Submit Enquiry List
+                              ← Back to Edit Customer Details
                             </button>
-                          </form>
+
+                            <div className="bg-[#FAF8F6] border border-espresso/15 p-4 rounded-xs text-center space-y-4">
+                              <div className="text-center space-y-1">
+                                <span className="inline-block px-2.5 py-0.5 bg-emerald-100 text-emerald-800 text-[9px] font-extrabold uppercase tracking-widest rounded-full">
+                                  Final Step: Scan & Pay via UPI QR
+                                </span>
+                                <h4 className="font-serif text-base font-bold text-espresso">
+                                  Scan QR Code to Pay
+                                </h4>
+                                <p className="text-[11px] text-espresso/70">
+                                  Scan with Google Pay, PhonePe, Paytm, BHIM, or any UPI app
+                                </p>
+                              </div>
+
+                              {/* Customer & Delivery Summary Card */}
+                              <div className="bg-white p-3 border border-espresso/10 rounded-xs text-left space-y-1 shadow-2xs">
+                                <div className="flex items-center justify-between text-[9px] uppercase tracking-wider text-taupe font-bold">
+                                  <span>Customer Delivery Details</span>
+                                  <button 
+                                    type="button" 
+                                    onClick={() => setPaymentStep('shipping')}
+                                    className="text-terracotta hover:underline cursor-pointer font-bold"
+                                  >
+                                    Edit Details
+                                  </button>
+                                </div>
+                                <p className="text-xs font-bold text-espresso">{pendingOrder.customerName} • {pendingOrder.phoneNumber}</p>
+                                <p className="text-[11px] text-espresso/80 leading-snug">
+                                  {pendingOrder.address ? `${pendingOrder.address}, ` : ''}{pendingOrder.city}, {pendingOrder.state} - {pendingOrder.postalCode}
+                                </p>
+                                {pendingOrder.email && (
+                                  <p className="text-[10px] text-espresso/60">{pendingOrder.email}</p>
+                                )}
+                              </div>
+
+                              {/* Embedded UPI QR Code */}
+                              <PaymentQRCode 
+                                amount={pendingOrder.total}
+                                orderId={pendingOrder.id}
+                                customerName={pendingOrder.customerName}
+                                customQrImageUrl={storePaymentQr}
+                              />
+
+                              {/* Confirm Payment Button */}
+                              <button
+                                onClick={() => {
+                                  finalizeOrder(pendingOrder, true, 'PAID-VIA-QR');
+                                }}
+                                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs uppercase tracking-widest font-extrabold shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer rounded-xs"
+                              >
+                                <Check className="w-4 h-4" />
+                                <span>I Have Completed Payment (₹{pendingOrder.total.toLocaleString('en-IN')})</span>
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  setPaymentStep('shipping');
+                                }}
+                                className="w-full py-2 text-[10px] text-espresso/70 hover:text-espresso underline cursor-pointer"
+                              >
+                                ← Edit Customer & Delivery Details
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          /* Customer Details & Shipping Form (Step 1) */
+                          <div className="space-y-4">
+                            <button 
+                              onClick={() => setIsCheckingOut(false)}
+                              className="text-[10px] uppercase text-taupe font-extrabold tracking-wider hover:text-espresso flex items-center gap-1 cursor-pointer"
+                            >
+                              ← Back to Shopping Cart
+                            </button>
+
+                            <form onSubmit={handleCheckoutSubmit} className="space-y-4">
+                              <div className="border-b border-espresso/15 pb-2">
+                                <span className="text-[9px] uppercase tracking-wider font-extrabold text-terracotta">Step 1 of 2</span>
+                                <h3 className="font-serif text-base font-bold text-espresso">
+                                  Customer & Delivery Details
+                                </h3>
+                                <p className="text-[11px] text-espresso/60">
+                                  Please enter your details. The Payment QR Code will appear next.
+                                </p>
+                              </div>
+                              
+                              <div className="space-y-3">
+                                <div>
+                                  <label className="block text-[9px] uppercase tracking-wider font-semibold text-espresso mb-1">Your Full Name *</label>
+                                  <input 
+                                    type="text" 
+                                    required
+                                    placeholder="Enter your full name"
+                                    value={checkoutDetails.customerName}
+                                    onChange={(e) => setCheckoutDetails(prev => ({ ...prev, customerName: e.target.value }))}
+                                    className="w-full border border-espresso/20 p-2 text-xs bg-white focus:outline-hidden focus:border-terracotta"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-[9px] uppercase tracking-wider font-semibold text-espresso mb-1">Phone Number (Required for Delivery) *</label>
+                                  <input 
+                                    type="tel" 
+                                    required
+                                    placeholder="10-digit mobile number"
+                                    value={checkoutDetails.phoneNumber}
+                                    onChange={(e) => setCheckoutDetails(prev => ({ ...prev, phoneNumber: e.target.value }))}
+                                    className="w-full border border-espresso/20 p-2 text-xs bg-white focus:outline-hidden focus:border-terracotta"
+                                  />
+                                  {/[^\d]/.test(checkoutDetails.phoneNumber) && checkoutDetails.phoneNumber !== '' && (
+                                    <p className="text-[10px] text-rose-600 mt-1 font-semibold">
+                                      Warning: Phone number must contain only numbers.
+                                    </p>
+                                  )}
+                                </div>
+
+                                <div>
+                                  <label className="block text-[9px] uppercase tracking-wider font-semibold text-espresso mb-1">Email Address (For Order Receipt & Invoice) *</label>
+                                  <input 
+                                    type="email" 
+                                    required
+                                    placeholder="yourname@gmail.com"
+                                    value={checkoutDetails.email || ''}
+                                    onChange={(e) => setCheckoutDetails(prev => ({ ...prev, email: e.target.value }))}
+                                    className="w-full border border-espresso/20 p-2 text-xs bg-white focus:outline-hidden focus:border-terracotta"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-[9px] uppercase tracking-wider font-semibold text-espresso mb-1">Delivery Street Address / Flat No. *</label>
+                                  <input 
+                                    type="text" 
+                                    required
+                                    placeholder="House/Flat No., Building, Street, Landmark"
+                                    value={checkoutDetails.address || ''}
+                                    onChange={(e) => setCheckoutDetails(prev => ({ ...prev, address: e.target.value }))}
+                                    className="w-full border border-espresso/20 p-2 text-xs bg-white focus:outline-hidden focus:border-terracotta"
+                                  />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <label className="block text-[9px] uppercase tracking-wider font-semibold text-espresso mb-1">City *</label>
+                                    <input 
+                                      type="text" 
+                                      required
+                                      placeholder="Enter city"
+                                      value={checkoutDetails.city}
+                                      onChange={(e) => setCheckoutDetails(prev => ({ ...prev, city: e.target.value }))}
+                                      className="w-full border border-espresso/20 p-2 text-xs bg-white focus:outline-hidden focus:border-terracotta"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-[9px] uppercase tracking-wider font-semibold text-espresso mb-1">State *</label>
+                                    <input 
+                                      type="text" 
+                                      required
+                                      placeholder="Enter state"
+                                      value={checkoutDetails.state}
+                                      onChange={(e) => setCheckoutDetails(prev => ({ ...prev, state: e.target.value }))}
+                                      className="w-full border border-espresso/20 p-2 text-xs bg-white focus:outline-hidden focus:border-terracotta"
+                                    />
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <label className="block text-[9px] uppercase tracking-wider font-semibold text-espresso mb-1">Postal Pincode *</label>
+                                  <input 
+                                    type="text" 
+                                    required
+                                    placeholder="Enter 6-digit pincode"
+                                    value={checkoutDetails.postalCode}
+                                    onChange={(e) => setCheckoutDetails(prev => ({ ...prev, postalCode: e.target.value }))}
+                                    className="w-full border border-espresso/20 p-2 text-xs bg-white focus:outline-hidden focus:border-terracotta"
+                                  />
+                                  {/[^\d]/.test(checkoutDetails.postalCode) && checkoutDetails.postalCode !== '' && (
+                                    <p className="text-[10px] text-rose-600 mt-1 font-semibold">
+                                      Warning: Pincode must contain only numbers.
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Payment Method Notice */}
+                              <div className="pt-2 border-t border-espresso/10 space-y-2">
+                                <label className="block text-[9px] uppercase tracking-wider font-bold text-espresso">
+                                  Payment Method
+                                </label>
+                                
+                                <div className="flex items-start gap-3 p-3 border border-terracotta/30 bg-terracotta/5 rounded-xs">
+                                  <div className="w-8 h-8 rounded-full bg-espresso text-linen flex items-center justify-center flex-shrink-0 mt-0.5 shadow-xs">
+                                    <QrCode className="w-4 h-4" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs font-bold text-espresso flex items-center gap-1.5">
+                                        <span>Instant UPI QR Code</span>
+                                      </span>
+                                      <span className="text-[8px] uppercase tracking-wider font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-full">
+                                        100% Secure
+                                      </span>
+                                    </div>
+                                    <p className="text-[10px] text-taupe mt-0.5 leading-snug">
+                                      Your order payment QR code will be generated in the final step. Pay via Google Pay, PhonePe, Paytm, BHIM, or any banking app.
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <button 
+                                type="submit"
+                                className="w-full py-3.5 bg-espresso text-[#FAF8F6] hover:bg-terracotta text-xs uppercase tracking-widest font-extrabold shadow-md transition-all mt-3 cursor-pointer flex items-center justify-center gap-2 rounded-xs"
+                              >
+                                <QrCode className="w-4 h-4" />
+                                <span>Continue to Payment QR Code (₹{grandTotal.toLocaleString('en-IN')}) →</span>
+                              </button>
+                            </form>
+                          </div>
                         )}
 
                       </div>
@@ -2586,8 +2904,8 @@ export default function App() {
 
                   </div>
 
-                  {/* Drawer Footer Accounting - Only show when not checked out success */}
-                  {cart.length > 0 && !checkoutSuccess && (
+                  {/* Drawer Footer Accounting - Only show when not checked out success and not in QR payment step */}
+                  {cart.length > 0 && !checkoutSuccess && paymentStep !== 'qr_payment' && (
                     <div className="p-6 border-t border-espresso/15 space-y-4 bg-[#FAF8F6]">
                       
                       {/* Free Shipping Progress Indicator */}
@@ -2631,7 +2949,7 @@ export default function App() {
                           </span>
                         </div>
                         <div className="flex justify-between text-sm font-bold pt-2 border-t border-espresso/10">
-                          <span>Estimated Value:</span>
+                          <span>Total Amount:</span>
                           <span>₹{grandTotal.toLocaleString('en-IN')}</span>
                         </div>
                       </div>
@@ -2641,7 +2959,7 @@ export default function App() {
                           {!currentUser ? (
                             <div className="space-y-2.5 p-3.5 bg-linen/20 border border-espresso/10 rounded-xs w-full">
                               <p className="text-[10px] font-bold text-espresso uppercase tracking-wider text-center">
-                                Submit Curation List
+                                Proceed to Checkout & Payment
                               </p>
                               <p className="text-[11px] text-espresso/70 text-center leading-normal">
                                 Create an account to track your orders, or proceed instantly as a guest.
@@ -2670,9 +2988,10 @@ export default function App() {
                               onClick={() => {
                                 setIsCheckingOut(true);
                               }}
-                              className="w-full py-4 bg-espresso text-[#FAF8F6] hover:bg-terracotta text-xs uppercase tracking-widest font-extrabold shadow-md transition-all cursor-pointer"
+                              className="w-full py-4 bg-espresso text-[#FAF8F6] hover:bg-terracotta text-xs uppercase tracking-widest font-extrabold shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
                             >
-                              Proceed to Enquiry Details
+                              <CreditCard className="w-4 h-4" />
+                              <span>Proceed to Checkout & Payment</span>
                             </button>
                           )}
                         </div>
@@ -2713,6 +3032,7 @@ export default function App() {
         onClose={() => setIsAccountOpen(false)}
         orders={orders}
         onOpenTrackModal={() => setIsTrackOrderOpen(true)}
+        onSelectOrder={(order) => setSelectedOrderForDetails(order)}
         currentUser={currentUser}
         onSignUp={handleUserSignUp}
         onLogOut={handleUserLogOut}
@@ -2735,6 +3055,7 @@ export default function App() {
         isOpen={isTrackOrderOpen}
         onClose={() => setIsTrackOrderOpen(false)}
         orders={orders}
+        onViewOrderDetails={(order) => setSelectedOrderForDetails(order)}
       />
 
       {/* 7. PRIVACY POLICY MODAL */}
@@ -2747,6 +3068,67 @@ export default function App() {
       <TermsConditionsModal 
         isOpen={isTermsOpen}
         onClose={() => setIsTermsOpen(false)}
+      />
+
+      {/* 9. STANDALONE SCAN & PAY QR MODAL */}
+      <ScanAndPayModal 
+        isOpen={isScanAndPayOpen}
+        onClose={() => setIsScanAndPayOpen(false)}
+        initialAmount={cart.length > 0 ? grandTotal : undefined}
+        orderId={pendingOrder?.id}
+        customQrImageUrl={storePaymentQr}
+        onPaymentComplete={(ref) => {
+          if (pendingOrder) {
+            finalizeOrder(pendingOrder, true, ref);
+          } else if (cart.length > 0) {
+            // Instant payment of cart contents
+            const subtotal = cart.reduce((acc, curr) => acc + curr.product.price * curr.quantity, 0);
+            const isFree = subtotal >= 499 || subtotal === 0;
+            const ship = isFree ? 0 : 49;
+            let disc = 0;
+            if (appliedCoupon) {
+              disc = appliedCoupon.type === 'percent' 
+                ? Math.round(subtotal * (appliedCoupon.value / 100))
+                : appliedCoupon.value;
+            }
+            const finTotal = Math.max(0, subtotal - disc + ship);
+            const tracking = `ZL-TRACK-${Math.floor(1000 + Math.random() * 9000)}`;
+            const oid = `ZL-${Math.floor(1000 + Math.random() * 9000)}`;
+            const newOrd: Order = {
+              id: oid,
+              customerName: checkoutDetails.customerName.trim() || 'Valued Luxe Client',
+              phoneNumber: checkoutDetails.phoneNumber.trim() || 'Online Customer',
+              email: checkoutDetails.email?.trim(),
+              address: checkoutDetails.address?.trim(),
+              city: checkoutDetails.city.trim() || 'Online Order',
+              state: checkoutDetails.state.trim() || 'India',
+              postalCode: checkoutDetails.postalCode.trim() || '560001',
+              items: [...cart],
+              total: finTotal,
+              discount: disc,
+              couponApplied: appliedCoupon?.code,
+              status: 'Pending',
+              date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+              trackingNumber: tracking,
+              isPaid: true,
+              paymentMethod: 'UPI_QR',
+              upiTransactionRef: ref
+            };
+            finalizeOrder(newOrd, true, ref);
+          }
+        }}
+      />
+
+      {/* 10. DETAILED ORDER RECEIPT & INVOICE MODAL */}
+      <OrderDetailsModal 
+        isOpen={!!selectedOrderForDetails}
+        order={selectedOrderForDetails}
+        onClose={() => setSelectedOrderForDetails(null)}
+        onOpenScanAndPay={(order) => {
+          setSelectedOrderForDetails(null);
+          setPendingOrder(order);
+          setIsScanAndPayOpen(true);
+        }}
       />
 
       {/* MOBILE CATEGORIES BOTTOM SHEET */}
