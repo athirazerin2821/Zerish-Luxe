@@ -38,6 +38,8 @@ export interface CartItem {
 export interface OrderDetails {
   customerName: string;
   phoneNumber: string;
+  email?: string;
+  address?: string;
   city: string;
   postalCode: string;
   state: string;
@@ -47,6 +49,8 @@ export interface Order {
   id: string;
   customerName: string;
   phoneNumber: string;
+  email?: string;
+  address?: string;
   city: string;
   postalCode: string;
   state: string;
@@ -58,6 +62,8 @@ export interface Order {
   date: string;
   trackingNumber: string;
   isPaid?: boolean;
+  paymentMethod?: 'UPI_QR' | 'COD' | 'CARD_ONLINE';
+  upiTransactionRef?: string;
 }
 
 export interface Coupon {
@@ -99,6 +105,26 @@ export interface InstagramPost {
   comments: number;
   location: string;
   jewellery: string;
+}
+
+export interface HeroSlide {
+  id: string;
+  imageUrl: string;
+  badge?: string; // e.g. "✨ Festive Offer", "💍 Wedding Season", "🌸 Akshaya Tritiya"
+  title: string;
+  subtitle: string;
+  description?: string;
+  ctaText?: string;
+  ctaTab?: string;
+  secondaryCtaText?: string;
+  secondaryCtaTab?: string;
+  isActive?: boolean;
+}
+
+export interface HeroCarouselSettings {
+  slides: HeroSlide[];
+  autoPlayIntervalSeconds?: number;
+  activeFestiveTheme?: string;
 }
 
 
