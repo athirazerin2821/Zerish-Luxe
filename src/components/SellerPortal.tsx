@@ -33,7 +33,7 @@ import {
 } from 'lucide-react';
 import { Product, Order, Coupon, SalesAnalytics, Testimonial, UserAccount, CategorySetting, InstagramPost, HeroSlide, HeroCarouselSettings } from '../types';
 import { PRESET_IMAGE_TEMPLATES, DEFAULT_HERO_SLIDES, FESTIVE_HERO_PRESETS, FestivePreset } from '../data';
-import { compressImageFile } from '../utils/imageOptimizer';
+import { compressImageFile } from '../services/imageOptimizer';
 import { updateStorePaymentQr, getStorePaymentQr } from '../services/firebaseDb';
 
 interface SellerPortalProps {
