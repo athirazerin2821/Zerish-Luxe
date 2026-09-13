@@ -20,7 +20,7 @@ import {
   Check
 } from 'lucide-react';
 import { Product } from '../types';
-import { shareProductToWhatsApp, formatWhatsAppProductMessage } from '../utils/shareUtils';
+import { shareProductToWhatsApp, formatWhatsAppProductMessage } from '../data';
 
 interface ProductModalProps {
   product: Product;
