@@ -1,4 +1,201 @@
-import { Product, Testimonial } from './types';
+import { Product, Testimonial, HeroSlide } from './types';
+
+const luxuryVneckAdCuffBannerImg = '/src/assets/images/luxury_vneck_ad_cuff_banner_1783757089887.jpg';
+const luxuryJewelryVNeckBannerImg = '/src/assets/images/luxury_jewelry_v_neck_banner_1783756960523.jpg';
+const luxuryJewelryModestBannerV2Img = '/src/assets/images/luxury_jewelry_modest_banner_v2_1783756827703.jpg';
+const goldJewelrySatinFlowersImg = '/src/assets/images/gold_jewelry_satin_flowers_1783581310352.jpg';
+const eleganceJewelryModelImg = '/src/assets/images/elegance_jewelry_model_1783579675029.jpg';
+
+export const DEFAULT_HERO_SLIDES: HeroSlide[] = [
+  {
+    id: 'hero-slide-1',
+    imageUrl: luxuryVneckAdCuffBannerImg,
+    badge: '✦ 18K Anti-Tarnish Gold',
+    title: 'Minimal. Timeless.',
+    subtitle: 'Made to Last.',
+    description: 'Handpicked minimal earrings, chains & cuffs that stay with you every moment, every day. 100% waterproof, sweatproof and anti-tarnish designed for modern elegance.',
+    ctaText: 'Shop Collection',
+    ctaTab: 'best-sellers',
+    secondaryCtaText: 'New Arrivals',
+    secondaryCtaTab: 'new-arrivals',
+    isActive: true
+  },
+  {
+    id: 'hero-slide-2',
+    imageUrl: luxuryJewelryVNeckBannerImg,
+    badge: '✨ Exclusive Craftsmanship',
+    title: 'Everyday Luxury.',
+    subtitle: 'Pure Subtle Glow.',
+    description: 'Lightweight, feather-soft jewellery crafted for effortless daily styling. Designed to layer seamlessly or captivate as standalone statement pieces.',
+    ctaText: 'Explore Chains',
+    ctaTab: 'chains',
+    secondaryCtaText: 'View Necklaces',
+    secondaryCtaTab: 'necklaces',
+    isActive: true
+  },
+  {
+    id: 'hero-slide-3',
+    imageUrl: luxuryJewelryModestBannerV2Img,
+    badge: '💎 Lifetime Lustre',
+    title: 'Heirloom Finish.',
+    subtitle: 'Forever In Shine.',
+    description: 'Advanced waterproof PVD gold layering and skin-safe hypoallergenic alloys. Guaranteed no blackening, no fading, and zero tarnishing.',
+    ctaText: 'Shop Best Sellers',
+    ctaTab: 'best-sellers',
+    secondaryCtaText: 'Shop Bracelets',
+    secondaryCtaTab: 'bracelets',
+    isActive: true
+  }
+];
+
+export interface FestivePreset {
+  id: string;
+  name: string;
+  badge: string;
+  icon: string;
+  slides: HeroSlide[];
+}
+
+export const FESTIVE_HERO_PRESETS: FestivePreset[] = [
+  {
+    id: 'diwali',
+    name: 'Diwali & Festive Glow',
+    badge: '✨ Diwali Festive Offer',
+    icon: '🪔',
+    slides: [
+      {
+        id: 'diwali-slide-1',
+        imageUrl: goldJewelrySatinFlowersImg,
+        badge: '🪔 Diwali Festive Special • 20% OFF',
+        title: 'Celebrate In Pure Radiance.',
+        subtitle: 'The Luminous Festive Edit.',
+        description: 'Illumine your celebrations with auspicious 18K anti-tarnish gold jewellery crafted for lifelong traditions and contemporary grace.',
+        ctaText: 'Shop Festive Edit',
+        ctaTab: 'best-sellers',
+        secondaryCtaText: 'Explore All Necklaces',
+        secondaryCtaTab: 'necklaces',
+        isActive: true
+      },
+      {
+        id: 'diwali-slide-2',
+        imageUrl: luxuryVneckAdCuffBannerImg,
+        badge: '✨ Auspicious Gold Curation',
+        title: 'Shine Bright This Diwali.',
+        subtitle: 'Heirloom Lustre & Blessings.',
+        description: 'Gift timeless elegance to loved ones. Complimentary premium festive velvet packaging with every order.',
+        ctaText: 'Shop Gift Curation',
+        ctaTab: 'chains',
+        secondaryCtaText: 'View Best Sellers',
+        secondaryCtaTab: 'best-sellers',
+        isActive: true
+      }
+    ]
+  },
+  {
+    id: 'wedding',
+    name: 'Wedding & Bridal Luxe',
+    badge: '💍 Wedding Season Special',
+    icon: '👑',
+    slides: [
+      {
+        id: 'wedding-slide-1',
+        imageUrl: eleganceJewelryModelImg,
+        badge: '👑 Royal Wedding & Bridal Edition',
+        title: 'Eternal Bridal Radiance.',
+        subtitle: 'Curated For The Modern Bride.',
+        description: 'From grand celebrations to intimate sangeet nights, discover statement chains and cuffs that dazzle through every cherished memory.',
+        ctaText: 'Shop Bridal Curations',
+        ctaTab: 'necklaces',
+        secondaryCtaText: 'Explore Bracelets',
+        secondaryCtaTab: 'bracelets',
+        isActive: true
+      },
+      {
+        id: 'wedding-slide-2',
+        imageUrl: luxuryJewelryVNeckBannerImg,
+        badge: '💎 Lifetime Tarnish-Proof Luxury',
+        title: 'Unforgettable Grace.',
+        subtitle: 'Crafted For Milestone Moments.',
+        description: 'Pure anti-tarnish finish that withstands heat, humidity, and perfume without losing an ounce of shine.',
+        ctaText: 'Shop Rings & Chains',
+        ctaTab: 'chains',
+        secondaryCtaText: 'Shop All',
+        secondaryCtaTab: 'best-sellers',
+        isActive: true
+      }
+    ]
+  },
+  {
+    id: 'akshaya_tritiya',
+    name: 'Akshaya Tritiya Gold Fest',
+    badge: '🌸 Akshaya Tritiya Exclusive',
+    icon: '🌸',
+    slides: [
+      {
+        id: 'akshaya-slide-1',
+        imageUrl: luxuryJewelryModestBannerV2Img,
+        badge: '🌸 Akshaya Tritiya Auspicious Gold',
+        title: 'Prosperity In Pure Gold.',
+        subtitle: 'Begin An Auspicious Journey.',
+        description: 'Bring home lasting prosperity with fine handpicked anti-tarnish jewelry. Timeless beauty made to be passed down through generations.',
+        ctaText: 'Shop Auspicious Gold',
+        ctaTab: 'chains',
+        secondaryCtaText: 'Explore Necklaces',
+        secondaryCtaTab: 'necklaces',
+        isActive: true
+      }
+    ]
+  },
+  {
+    id: 'eid',
+    name: 'Eid Mubarak Collection',
+    badge: '🌙 Eid Mubarak Collection',
+    icon: '🌙',
+    slides: [
+      {
+        id: 'eid-slide-1',
+        imageUrl: luxuryVneckAdCuffBannerImg,
+        badge: '🌙 Eid Mubarak Special Edit',
+        title: 'Graceful Festive Glow.',
+        subtitle: 'Shine In Handcrafted Elegance.',
+        description: 'Celebrate festive joy with lightweight luxury pieces designed for radiant gatherings and memorable moments.',
+        ctaText: 'Shop Eid Specials',
+        ctaTab: 'best-sellers',
+        secondaryCtaText: 'Explore Chains',
+        secondaryCtaTab: 'chains',
+        isActive: true
+      }
+    ]
+  },
+  {
+    id: 'valentines',
+    name: "Valentine's & Love Edit",
+    badge: '❤️ The Love & Gifting Edit',
+    icon: '❤️',
+    slides: [
+      {
+        id: 'val-slide-1',
+        imageUrl: goldJewelrySatinFlowersImg,
+        badge: '❤️ The Valentine & Love Collection',
+        title: 'Whispers Of Love.',
+        subtitle: 'Gifts That Speak Forever.',
+        description: 'Express timeless affection with delicate waterproof gold pieces delivered in our iconic luxury gift box.',
+        ctaText: 'Shop Gifting Collection',
+        ctaTab: 'best-sellers',
+        secondaryCtaText: 'Shop Necklaces',
+        secondaryCtaTab: 'necklaces',
+        isActive: true
+      }
+    ]
+  },
+  {
+    id: 'classic',
+    name: 'Classic Minimal Luxe (Default)',
+    badge: '✦ Everyday Luxury',
+    icon: '✨',
+    slides: DEFAULT_HERO_SLIDES
+  }
+];
 
 export const INITIAL_PRODUCTS: Product[] = [
   // --- CHAINS ---
@@ -508,3 +705,80 @@ export const PRESET_IMAGE_TEMPLATES = [
     url: 'https://images.unsplash.com/photo-1626784215021-2e39ac514150?q=85&w=1600&auto=format&fit=crop'
   }
 ];
+
+/**
+ * Generates an elegant WhatsApp share message for a product
+ */
+export function formatWhatsAppProductMessage(product: Product): string {
+  const currentUrl = typeof window !== 'undefined' ? `${window.location.origin}/#product-${product.id}` : '';
+  const priceFormatted = `₹${product.price.toLocaleString('en-IN')}`;
+  const originalPriceFormatted = product.originalPrice ? `₹${product.originalPrice.toLocaleString('en-IN')}` : '';
+  
+  let msg = `✨ *ZERISH LUXE FINE JEWELLERY* ✨\n\n`;
+  msg += `💍 *${product.name}*\n`;
+  msg += `🏷️ *Price:* ${priceFormatted}`;
+  if (product.originalPrice && product.originalPrice > product.price) {
+    msg += ` ~${originalPriceFormatted}~ (${Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}% OFF)`;
+  }
+  msg += `\n`;
+  
+  if (product.material) {
+    msg += `✨ *Craft:* ${product.material}\n`;
+  }
+  
+  msg += `🛡️ *Highlights:* 100% Anti-Tarnish, Waterproof & Sweatproof, Skin-Friendly\n`;
+  
+  if (product.imageUrl) {
+    msg += `🖼️ *Product Image:* ${product.imageUrl}\n`;
+  }
+  
+  if (currentUrl) {
+    msg += `🔗 *View Piece Online:* ${currentUrl}\n`;
+  }
+  
+  msg += `\n_Crafted for everyday luxury and timeless grace._`;
+  
+  return msg;
+}
+
+/**
+ * Triggers WhatsApp share for a product
+ */
+export function shareProductToWhatsApp(product: Product): void {
+  const text = formatWhatsAppProductMessage(product);
+  const encodedText = encodeURIComponent(text);
+  const whatsappUrl = `https://api.whatsapp.com/send?text=${encodedText}`;
+  
+  if (typeof window !== 'undefined') {
+    window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+  }
+}
+
+/**
+ * Native Web Share API with fallback to WhatsApp & Clipboard
+ */
+export async function shareProductNativeOrWhatsApp(product: Product): Promise<'native' | 'whatsapp' | 'copied'> {
+  const text = formatWhatsAppProductMessage(product);
+  const currentUrl = typeof window !== 'undefined' ? `${window.location.origin}/#product-${product.id}` : '';
+
+  if (typeof navigator !== 'undefined' && navigator.share) {
+    try {
+      await navigator.share({
+        title: `${product.name} - Zerish Luxe`,
+        text: text,
+        url: currentUrl || undefined,
+      });
+      return 'native';
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        shareProductToWhatsApp(product);
+        return 'whatsapp';
+      }
+      return 'native';
+    }
+  } else {
+    shareProductToWhatsApp(product);
+    return 'whatsapp';
+  }
+}
+
