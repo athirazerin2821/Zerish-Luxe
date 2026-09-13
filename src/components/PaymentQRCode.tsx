@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import QRCode from 'qrcode';
-import { QrCode, ShieldCheck, Image as ImageIcon } from 'lucide-react';
+import { QrCode, ShieldCheck, Image as ImageIcon, ExternalLink } from 'lucide-react';
 
 interface PaymentQRCodeProps {
   amount?: number;
@@ -25,6 +24,8 @@ export default function PaymentQRCode({
 }: PaymentQRCodeProps) {
   const [customQr, setCustomQr] = useState<string>('');
   const [fallbackQrUrl, setFallbackQrUrl] = useState<string>('');
+
+  const upiUrl = `upi://pay?pn=${encodeURIComponent(merchantName)}&am=${amount || ''}&cu=INR&tn=${encodeURIComponent(orderId ? `Order ${orderId}` : note)}`;
 
   // Load custom QR code from prop or localStorage
   useEffect(() => {
@@ -58,20 +59,10 @@ export default function PaymentQRCode({
   // Generate a fallback clean QR code if no custom image is uploaded yet
   useEffect(() => {
     if (!customQr) {
-      const upiUrl = `upi://pay?pn=${encodeURIComponent(merchantName)}&am=${amount || ''}&cu=INR&tn=${encodeURIComponent(orderId ? `Order ${orderId}` : note)}`;
-      QRCode.toDataURL(upiUrl, {
-        width: 280,
-        margin: 2,
-        color: {
-          dark: '#2B1E1A',
-          light: '#FAF8F6'
-        },
-        errorCorrectionLevel: 'H'
-      })
-        .then((url: string) => setFallbackQrUrl(url))
-        .catch((err: any) => console.error('Failed to render QR Code:', err));
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(upiUrl)}&color=2B1E1A&bgcolor=FAF8F6&margin=2`;
+      setFallbackQrUrl(qrUrl);
     }
-  }, [customQr, amount, orderId, note, merchantName]);
+  }, [customQr, upiUrl]);
 
   const displayImage = customQr || fallbackQrUrl;
 
@@ -106,6 +97,13 @@ export default function PaymentQRCode({
               src={displayImage} 
               alt="Payment QR Code" 
               className="w-52 h-52 sm:w-60 sm:h-60 object-contain rounded-xs"
+              onError={(e) => {
+                const target = e.currentTarget;
+                const backupUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUrl)}&size=300&dark=2b1e1a&light=faf8f6&margin=2`;
+                if (target.src !== backupUrl) {
+                  target.src = backupUrl;
+                }
+              }}
             />
           ) : (
             <div className="w-52 h-52 sm:w-60 sm:h-60 flex flex-col items-center justify-center text-taupe text-xs p-4 text-center space-y-2">
@@ -119,8 +117,19 @@ export default function PaymentQRCode({
           Scan with Any UPI App (Google Pay, PhonePe, Paytm, BHIM, Cred)
         </p>
 
+        {/* Mobile direct pay button */}
+        <div className="w-full mt-3 sm:hidden">
+          <a
+            href={upiUrl}
+            className="flex items-center justify-center space-x-1.5 w-full py-2 px-3 bg-espresso hover:bg-terracotta text-white font-bold text-[11px] uppercase tracking-wider rounded-xs transition-colors shadow-xs"
+          >
+            <span>Open UPI App to Pay</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        </div>
+
         {/* Accepted Payment Apps Badges */}
-        <div className="flex items-center justify-center flex-wrap gap-1.5 mt-2">
+        <div className="flex items-center justify-center flex-wrap gap-1.5 mt-2.5">
           {['GPay', 'PhonePe', 'Paytm', 'BHIM', 'Cred', 'Amazon Pay'].map((app) => (
             <span 
               key={app}
