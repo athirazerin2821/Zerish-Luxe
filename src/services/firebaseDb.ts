@@ -12,7 +12,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
 import { Product, Order, Coupon, Testimonial, UserAccount, CategorySetting, InstagramPost, HeroSlide, HeroCarouselSettings } from '../types';
 import { INITIAL_PRODUCTS, TESTIMONIALS, DEFAULT_HERO_SLIDES } from '../data';
-import { optimizeDataUrl } from '../utils/imageOptimizer';
+import { optimizeDataUrl, optimizeProductForFirestore } from '../utils/imageOptimizer';
 
 export const DEFAULT_INSTAGRAM_POSTS: InstagramPost[] = [];
 
@@ -175,8 +175,6 @@ export async function seedDatabaseIfEmpty(force = false) {
 
   // 5. Seed Orders (Omitted as requested to keep dashboard free of dummy data)
 }
-
-import { optimizeProductForFirestore } from '../utils/imageOptimizer';
 
 // Products API
 export async function getProducts(): Promise<Product[]> {
