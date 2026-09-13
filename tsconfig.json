@@ -18,6 +18,12 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "/utils/*": [
+        "./src/utils/*"
+      ],
+      "utils/*": [
+        "./src/utils/*"
       ]
     },
     "allowImportingTsExtensions": true,
