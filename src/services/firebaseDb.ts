@@ -12,7 +12,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
 import { Product, Order, Coupon, Testimonial, UserAccount, CategorySetting, InstagramPost, HeroSlide, HeroCarouselSettings } from '../types';
 import { INITIAL_PRODUCTS, TESTIMONIALS, DEFAULT_HERO_SLIDES } from '../data';
-import { optimizeDataUrl, optimizeProductForFirestore } from '../utils/imageOptimizer';
+import { optimizeDataUrl, optimizeProductForFirestore } from './imageOptimizer';
 
 export const DEFAULT_INSTAGRAM_POSTS: InstagramPost[] = [];
 
