@@ -37,8 +37,7 @@ import { motion, AnimatePresence } from 'motion/react';
 
 // Data and Types
 import { Product, CartItem, Order, Coupon, OrderDetails, Testimonial, UserAccount, CategorySetting, InstagramPost, HeroSlide, HeroCarouselSettings } from './types';
-import { INITIAL_PRODUCTS, TESTIMONIALS, DEFAULT_HERO_SLIDES } from './data';
-import { shareProductToWhatsApp } from './utils/shareUtils';
+import { INITIAL_PRODUCTS, TESTIMONIALS, DEFAULT_HERO_SLIDES, shareProductToWhatsApp } from './data';
 
 // Firebase Services
 import { auth } from './firebase';
