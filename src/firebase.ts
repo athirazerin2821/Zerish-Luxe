@@ -32,7 +32,15 @@ const app = getApps().length > 0
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-export const storage = getStorage(app);
+
+let storageInstance: ReturnType<typeof getStorage>;
+try {
+  storageInstance = getStorage(app);
+} catch (err) {
+  console.warn('Firebase Storage initialization fallback:', err);
+  storageInstance = {} as ReturnType<typeof getStorage>;
+}
+export const storage = storageInstance;
 
 export default app;
 
