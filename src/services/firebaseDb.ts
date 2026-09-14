@@ -10,9 +10,10 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
-import { Product, Order, Coupon, Testimonial, UserAccount, CategorySetting, InstagramPost, HeroSlide, HeroCarouselSettings } from '../types';
+import { Product, Order, Coupon, Testimonial, UserAccount, CategorySetting, InstagramPost, HeroSlide, HeroCarouselSettings, UpiPaymentSettings } from '../types';
 import { INITIAL_PRODUCTS, TESTIMONIALS, DEFAULT_HERO_SLIDES } from '../data';
 import { optimizeDataUrl, optimizeProductForFirestore } from './imageOptimizer';
+import { DEFAULT_UPI_SETTINGS, getCachedUpiSettings, setCachedUpiSettings } from '../utils/upi';
 
 export const DEFAULT_INSTAGRAM_POSTS: InstagramPost[] = [];
 
@@ -326,6 +327,45 @@ export async function updateStorePaymentQr(qrImageUrl: string): Promise<void> {
   }
 }
 
+// Settings / Store UPI App Pay & VPA Configuration API
+export async function getUpiPaymentSettings(): Promise<UpiPaymentSettings> {
+  try {
+    const docSnap = await getDoc(doc(db, 'settings', 'upi_payment'));
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      if (data && typeof data.upiId === 'string' && data.upiId.trim()) {
+        const settings: UpiPaymentSettings = {
+          upiId: data.upiId.trim(),
+          merchantName: data.merchantName?.trim() || DEFAULT_UPI_SETTINGS.merchantName,
+          defaultNote: data.defaultNote?.trim() || DEFAULT_UPI_SETTINGS.defaultNote,
+          isDirectAppPayEnabled: data.isDirectAppPayEnabled !== false
+        };
+        setCachedUpiSettings(settings);
+        return settings;
+      }
+    }
+  } catch (err) {
+    console.warn('Could not fetch upi_payment from Firestore, falling back to local cache:', err);
+  }
+  return getCachedUpiSettings();
+}
+
+export async function updateUpiPaymentSettings(settings: UpiPaymentSettings): Promise<void> {
+  const sanitized: UpiPaymentSettings = {
+    upiId: settings.upiId.trim(),
+    merchantName: settings.merchantName?.trim() || DEFAULT_UPI_SETTINGS.merchantName,
+    defaultNote: settings.defaultNote?.trim() || DEFAULT_UPI_SETTINGS.defaultNote,
+    isDirectAppPayEnabled: settings.isDirectAppPayEnabled !== false
+  };
+
+  await setDoc(doc(db, 'settings', 'upi_payment'), {
+    ...sanitized,
+    updatedAt: new Date().toISOString()
+  });
+
+  setCachedUpiSettings(sanitized);
+}
+
 // Settings / Hero Festive Carousel API
 export async function getHeroCarouselSettings(): Promise<HeroCarouselSettings> {
   try {
@@ -333,8 +373,16 @@ export async function getHeroCarouselSettings(): Promise<HeroCarouselSettings> {
     if (docSnap.exists()) {
       const data = docSnap.data();
       if (data && Array.isArray(data.slides) && data.slides.length > 0) {
+        const sanitizedSlides = (data.slides as HeroSlide[]).map((slide, idx) => {
+          let img = slide.imageUrl;
+          if (!img || img.startsWith('/src/assets/images/')) {
+            img = DEFAULT_HERO_SLIDES[idx % DEFAULT_HERO_SLIDES.length]?.imageUrl || img;
+          }
+          return { ...slide, imageUrl: img };
+        });
+
         return {
-          slides: data.slides as HeroSlide[],
+          slides: sanitizedSlides,
           autoPlayIntervalSeconds: data.autoPlayIntervalSeconds || 6,
           activeFestiveTheme: data.activeFestiveTheme || 'classic'
         };
