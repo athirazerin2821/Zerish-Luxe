@@ -43,8 +43,9 @@ import { Product, CartItem, Order, Coupon, OrderDetails, Testimonial, UserAccoun
 import { INITIAL_PRODUCTS, TESTIMONIALS, DEFAULT_HERO_SLIDES, shareProductToWhatsApp } from './data';
 
 // Firebase Services
-import { auth } from './firebase';
+import { auth, db } from './firebase';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { collection, getDocs, deleteDoc, doc, addDoc } from 'firebase/firestore';
 import { 
   seedDatabaseIfEmpty, 
   getProducts, 
@@ -1043,8 +1044,6 @@ export default function App() {
   const handleResetCatalog = async () => {
     if (confirm('Revert catalog to luxury starting default items? This clears custom edits.')) {
       try {
-        const { db } = await import('./firebase');
-        const { collection, getDocs, deleteDoc, doc } = await import('firebase/firestore');
         const snapshot = await getDocs(collection(db, 'products'));
         const deletePromises = snapshot.docs.map(d => deleteDoc(doc(db, 'products', d.id)));
         await Promise.all(deletePromises);
@@ -1104,19 +1103,15 @@ export default function App() {
     setContactSuccess(true);
     
     // Save to Firestore
-    import('./firebase').then(({ db }) => {
-      import('firebase/firestore').then(({ collection, addDoc }) => {
-        addDoc(collection(db, 'contacts'), {
-          name: contactName, 
-          phone: contactPhone, 
-          city: contactCity, 
-          state: contactState, 
-          category: contactCategory, 
-          message: contactMsg,
-          date: new Date().toLocaleDateString()
-        }).catch(err => console.error('Error saving contact query to Firestore:', err));
-      });
-    });
+    addDoc(collection(db, 'contacts'), {
+      name: contactName, 
+      phone: contactPhone, 
+      city: contactCity, 
+      state: contactState, 
+      category: contactCategory, 
+      message: contactMsg,
+      date: new Date().toLocaleDateString()
+    }).catch(err => console.error('Error saving contact query to Firestore:', err));
 
     // Construct the WhatsApp message
     const formattedCategory = contactCategory
