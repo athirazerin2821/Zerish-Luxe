@@ -29,12 +29,17 @@ import {
   PlusCircle,
   QrCode,
   Upload,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Smartphone,
+  Copy,
+  ExternalLink,
+  AlertCircle
 } from 'lucide-react';
-import { Product, Order, Coupon, SalesAnalytics, Testimonial, UserAccount, CategorySetting, InstagramPost, HeroSlide, HeroCarouselSettings } from '../types';
+import { Product, Order, Coupon, SalesAnalytics, Testimonial, UserAccount, CategorySetting, InstagramPost, HeroSlide, HeroCarouselSettings, UpiPaymentSettings } from '../types';
 import { PRESET_IMAGE_TEMPLATES, DEFAULT_HERO_SLIDES, FESTIVE_HERO_PRESETS, FestivePreset } from '../data';
 import { compressImageFile } from '../services/imageOptimizer';
-import { updateStorePaymentQr, getStorePaymentQr } from '../services/firebaseDb';
+import { updateStorePaymentQr, getStorePaymentQr, getUpiPaymentSettings, updateUpiPaymentSettings, uploadProductImage } from '../services/firebaseDb';
+import { isValidUpiId, buildUpiUrl, DEFAULT_UPI_SETTINGS, getCachedUpiSettings } from '../utils/upi';
 
 interface SellerPortalProps {
   isOpen: boolean;
@@ -65,6 +70,8 @@ interface SellerPortalProps {
   onDeleteInstagramPost?: (id: string) => Promise<void> | void;
   storePaymentQr?: string;
   onUpdateStorePaymentQr?: (qr: string) => Promise<void> | void;
+  storeUpiSettings?: UpiPaymentSettings;
+  onUpdateUpiSettings?: (settings: UpiPaymentSettings) => Promise<void> | void;
 }
 
 export default function SellerPortal({
@@ -95,7 +102,9 @@ export default function SellerPortal({
   onAddInstagramPost,
   onDeleteInstagramPost,
   storePaymentQr,
-  onUpdateStorePaymentQr
+  onUpdateStorePaymentQr,
+  storeUpiSettings,
+  onUpdateUpiSettings
 }: SellerPortalProps) {
   // Auth states
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -136,7 +145,6 @@ export default function SellerPortal({
     if (!file) return;
     setUploading(true);
     try {
-      const { uploadProductImage } = await import('../services/firebaseDb');
       const url = await Promise.race([
         uploadProductImage(file),
         new Promise<string>((_, reject) => 
@@ -165,7 +173,6 @@ export default function SellerPortal({
     if (!file) return;
     setAdditionalUploading(true);
     try {
-      const { uploadProductImage } = await import('../services/firebaseDb');
       const url = await Promise.race([
         uploadProductImage(file),
         new Promise<string>((_, reject) => 
@@ -221,7 +228,6 @@ export default function SellerPortal({
     if (!file) return;
     setEditPrimaryUploading(true);
     try {
-      const { uploadProductImage } = await import('../services/firebaseDb');
       const url = await Promise.race([
         uploadProductImage(file),
         new Promise<string>((_, reject) => 
@@ -265,7 +271,6 @@ export default function SellerPortal({
     if (!file) return;
     setEditAdditionalUploading(true);
     try {
-      const { uploadProductImage } = await import('../services/firebaseDb');
       const url = await Promise.race([
         uploadProductImage(file),
         new Promise<string>((_, reject) => 
@@ -367,6 +372,78 @@ export default function SellerPortal({
   const [qrUploadLoading, setQrUploadLoading] = useState(false);
   const [qrSavedNotice, setQrSavedNotice] = useState(false);
 
+  // Store Direct UPI URL & Gateway Configuration state (Option 1)
+  const [localUpiSettings, setLocalUpiSettings] = useState<UpiPaymentSettings>(() => {
+    return storeUpiSettings || getCachedUpiSettings();
+  });
+  const [upiSavedNotice, setUpiSavedNotice] = useState(false);
+  const [upiSaving, setUpiSaving] = useState(false);
+  const [upiValidationError, setUpiValidationError] = useState<string | null>(null);
+  const [copiedUpiUrl, setCopiedUpiUrl] = useState(false);
+
+  useEffect(() => {
+    if (storeUpiSettings) {
+      setLocalUpiSettings(storeUpiSettings);
+    } else {
+      getUpiPaymentSettings().then(settings => {
+        if (settings) setLocalUpiSettings(settings);
+      }).catch(err => console.warn('Could not fetch store UPI settings:', err));
+    }
+  }, [isOpen, storeUpiSettings]);
+
+  const handleSaveUpiSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setUpiValidationError(null);
+
+    const cleanedId = localUpiSettings.upiId.trim();
+    if (!cleanedId) {
+      setUpiValidationError('Please enter a valid UPI ID (VPA), e.g. 9916026262@upi or yourname@okhdfcbank');
+      return;
+    }
+
+    if (!isValidUpiId(cleanedId)) {
+      setUpiValidationError('Invalid UPI ID format. It should look like username@bank or mobilenumber@upi (contains an @ symbol).');
+      return;
+    }
+
+    setUpiSaving(true);
+    try {
+      const updated: UpiPaymentSettings = {
+        ...localUpiSettings,
+        upiId: cleanedId,
+        merchantName: localUpiSettings.merchantName.trim() || DEFAULT_UPI_SETTINGS.merchantName,
+        defaultNote: localUpiSettings.defaultNote?.trim() || DEFAULT_UPI_SETTINGS.defaultNote,
+        isDirectAppPayEnabled: localUpiSettings.isDirectAppPayEnabled !== false
+      };
+      await updateUpiPaymentSettings(updated);
+      if (onUpdateUpiSettings) {
+        await onUpdateUpiSettings(updated);
+      }
+      setUpiSavedNotice(true);
+      setTimeout(() => setUpiSavedNotice(false), 4000);
+    } catch (err) {
+      console.warn('Error saving store UPI settings:', err);
+      setUpiValidationError('Failed to save UPI settings to database.');
+    } finally {
+      setUpiSaving(false);
+    }
+  };
+
+  const sampleUpiUrl = buildUpiUrl({
+    upiId: localUpiSettings.upiId,
+    merchantName: localUpiSettings.merchantName,
+    amount: 1500,
+    orderId: 'DEMO-101',
+    note: localUpiSettings.defaultNote
+  });
+
+  const handleCopySampleUpiUrl = () => {
+    navigator.clipboard.writeText(sampleUpiUrl).then(() => {
+      setCopiedUpiUrl(true);
+      setTimeout(() => setCopiedUpiUrl(false), 3000);
+    }).catch(() => {});
+  };
+
   useEffect(() => {
     if (storePaymentQr) {
       setCustomStoreQr(storePaymentQr);
@@ -462,7 +539,6 @@ export default function SellerPortal({
   const handleSlideImageUpload = async (idx: number, file: File) => {
     setHeroUploadIdx(idx);
     try {
-      const { uploadProductImage } = await import('../services/firebaseDb');
       const url = await Promise.race([
         uploadProductImage(file),
         new Promise<string>((_, reject) => 
@@ -615,7 +691,6 @@ export default function SellerPortal({
   const handleNewCategoryUpload = async (file: File) => {
     setNewCatUploading(true);
     try {
-      const { uploadProductImage } = await import('../services/firebaseDb');
       const url = await Promise.race([
         uploadProductImage(file),
         new Promise<string>((_, reject) => 
@@ -666,7 +741,6 @@ export default function SellerPortal({
     let finalImageUrl = '';
 
     try {
-      const { uploadProductImage } = await import('../services/firebaseDb');
       const url = await Promise.race([
         uploadProductImage(file),
         new Promise<string>((_, reject) => 
@@ -2534,6 +2608,176 @@ export default function SellerPortal({
                   {/* ========================================== */}
                   {adminTab === 'settings' && (
                     <div className="space-y-8 max-w-4xl">
+                      {/* Direct UPI Payment URL & App Gateway Configuration (Option 1) */}
+                      <div className="bg-white border border-espresso/15 p-6 rounded-xs space-y-5 shadow-3xs">
+                        <div className="border-b border-espresso/10 pb-3 flex items-center justify-between">
+                          <div className="flex items-center space-x-2.5">
+                            <div className="w-8 h-8 rounded-full bg-terracotta text-white flex items-center justify-center shadow-xs">
+                              <Smartphone className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <div className="flex items-center space-x-2">
+                                <h4 className="font-serif text-base font-bold text-espresso">Direct UPI Payment & App Intent Configuration</h4>
+                                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-[9px] font-extrabold uppercase tracking-wider">
+                                  Option 1 Active
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-taupe">Configure your UPI ID (VPA) so customers can pay directly through Google Pay, PhonePe, Paytm, or BHIM.</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <form onSubmit={handleSaveUpiSettings} className="space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* UPI ID (VPA) */}
+                            <div>
+                              <label className="block text-[10px] uppercase tracking-wider font-extrabold text-espresso mb-1">
+                                Store UPI ID (VPA) *
+                              </label>
+                              <div className="relative">
+                                <input
+                                  type="text"
+                                  placeholder="e.g. 9916026262@upi or zerish@okhdfcbank"
+                                  value={localUpiSettings.upiId}
+                                  onChange={(e) => {
+                                    setLocalUpiSettings(prev => ({ ...prev, upiId: e.target.value }));
+                                    if (upiValidationError) setUpiValidationError(null);
+                                  }}
+                                  className="w-full border border-espresso/25 p-2.5 text-xs bg-[#FAF8F6] font-mono font-semibold focus:outline-hidden focus:border-terracotta rounded-xs"
+                                  required
+                                />
+                              </div>
+                              <p className="text-[10px] text-taupe mt-1">
+                                This is your bank or merchant Virtual Payment Address that receives payments directly.
+                              </p>
+                            </div>
+
+                            {/* Merchant / Business Payee Name */}
+                            <div>
+                              <label className="block text-[10px] uppercase tracking-wider font-extrabold text-espresso mb-1">
+                                Payee / Merchant Business Name *
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="e.g. Zerish Luxe Fine Jewellery"
+                                value={localUpiSettings.merchantName}
+                                onChange={(e) => setLocalUpiSettings(prev => ({ ...prev, merchantName: e.target.value }))}
+                                className="w-full border border-espresso/25 p-2.5 text-xs bg-[#FAF8F6] font-medium focus:outline-hidden focus:border-terracotta rounded-xs"
+                                required
+                              />
+                              <p className="text-[10px] text-taupe mt-1">
+                                Displayed in customer's UPI payment apps as the verified payee.
+                              </p>
+                            </div>
+
+                            {/* Transaction Note */}
+                            <div className="md:col-span-2">
+                              <label className="block text-[10px] uppercase tracking-wider font-extrabold text-espresso mb-1">
+                                Default Payment Note / Description
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="e.g. Zerish Luxe Fine Jewellery Order"
+                                value={localUpiSettings.defaultNote || ''}
+                                onChange={(e) => setLocalUpiSettings(prev => ({ ...prev, defaultNote: e.target.value }))}
+                                className="w-full border border-espresso/25 p-2.5 text-xs bg-[#FAF8F6] font-medium focus:outline-hidden focus:border-terracotta rounded-xs"
+                              />
+                              <p className="text-[10px] text-taupe mt-1">
+                                Pre-filled note in the UPI transaction receipt (appends order number automatically at checkout).
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Direct 1-Tap App Pay toggle */}
+                          <div className="p-3 bg-[#FAF8F6] border border-espresso/15 rounded-xs flex items-center justify-between">
+                            <div>
+                              <span className="text-xs font-bold text-espresso block">Enable Direct "Pay with UPI App" Buttons</span>
+                              <span className="text-[10px] text-taupe block">
+                                Shows Google Pay, PhonePe, Paytm, and BHIM buttons that launch the app with pre-filled amount.
+                              </span>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={localUpiSettings.isDirectAppPayEnabled}
+                                onChange={(e) => setLocalUpiSettings(prev => ({ ...prev, isDirectAppPayEnabled: e.target.checked }))}
+                                className="sr-only peer"
+                              />
+                              <div className="w-9 h-5 bg-espresso/20 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-espresso/30 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                            </label>
+                          </div>
+
+                          {/* Live Generated UPI URI Preview Card */}
+                          <div className="p-3 bg-linen/25 border border-espresso/15 rounded-xs space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[9px] uppercase tracking-wider font-extrabold text-taupe">
+                                Generated NPCI UPI URL / Deep Link Preview (Sample Order)
+                              </span>
+                              <button
+                                type="button"
+                                onClick={handleCopySampleUpiUrl}
+                                className="text-[10px] text-espresso font-bold flex items-center space-x-1 hover:text-terracotta cursor-pointer"
+                              >
+                                {copiedUpiUrl ? (
+                                  <>
+                                    <Check className="w-3 h-3 text-emerald-600" />
+                                    <span className="text-emerald-700">Copied Link!</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="w-3 h-3" />
+                                    <span>Copy Sample Link</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                            <div className="p-2 bg-white border border-espresso/10 rounded-xs font-mono text-[10px] text-espresso break-all select-all">
+                              {sampleUpiUrl}
+                            </div>
+                            <div className="flex items-center space-x-3 text-[10px] text-taupe">
+                              <span>• Supports Android & iOS intent handlers</span>
+                              <span>• Supports Google Pay, PhonePe, Paytm, BHIM, Cred</span>
+                            </div>
+                          </div>
+
+                          {/* Error Notice */}
+                          {upiValidationError && (
+                            <div className="p-2.5 bg-red-50 border border-red-200 rounded-xs flex items-center space-x-2 text-red-700 text-xs">
+                              <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                              <span>{upiValidationError}</span>
+                            </div>
+                          )}
+
+                          {/* Success Notice */}
+                          {upiSavedNotice && (
+                            <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xs flex items-center space-x-2 text-emerald-800 text-xs font-bold">
+                              <Check className="w-4 h-4 text-emerald-600" />
+                              <span>UPI Settings saved successfully! Active across checkout and QR code payments.</span>
+                            </div>
+                          )}
+
+                          {/* Save Button */}
+                          <div className="flex items-center justify-between pt-2">
+                            <a
+                              href={sampleUpiUrl}
+                              className="text-[10px] uppercase tracking-wider font-extrabold text-terracotta hover:underline flex items-center space-x-1"
+                            >
+                              <span>Test UPI Intent on this device</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+
+                            <button
+                              type="submit"
+                              disabled={upiSaving}
+                              className="py-2.5 px-6 bg-espresso hover:bg-terracotta text-white rounded-xs text-[10px] uppercase tracking-widest font-extrabold flex items-center space-x-2 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>{upiSaving ? 'Saving UPI Settings...' : 'Save UPI Settings'}</span>
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+
                       {/* Store Payment QR Code Settings */}
                       <div className="bg-white border border-espresso/10 p-6 rounded-xs space-y-5 shadow-3xs">
                         <div className="border-b border-espresso/10 pb-3 flex items-center justify-between">
