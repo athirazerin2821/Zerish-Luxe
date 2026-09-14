@@ -31,12 +31,15 @@ import {
   ChevronRight,
   Share2,
   QrCode,
-  CreditCard
+  CreditCard,
+  AlertCircle,
+  Smartphone,
+  ChevronUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 // Data and Types
-import { Product, CartItem, Order, Coupon, OrderDetails, Testimonial, UserAccount, CategorySetting, InstagramPost, HeroSlide, HeroCarouselSettings } from './types';
+import { Product, CartItem, Order, Coupon, OrderDetails, Testimonial, UserAccount, CategorySetting, InstagramPost, HeroSlide, HeroCarouselSettings, UpiPaymentSettings } from './types';
 import { INITIAL_PRODUCTS, TESTIMONIALS, DEFAULT_HERO_SLIDES, shareProductToWhatsApp } from './data';
 
 // Firebase Services
@@ -72,6 +75,8 @@ import {
   updateHeroCarouselSettings,
   getStorePaymentQr,
   updateStorePaymentQr,
+  getUpiPaymentSettings,
+  updateUpiPaymentSettings,
   DEFAULT_CATEGORIES
 } from './services/firebaseDb';
 
@@ -87,6 +92,9 @@ import SellerPortal from './components/SellerPortal';
 import PaymentQRCode from './components/PaymentQRCode';
 import ScanAndPayModal from './components/ScanAndPayModal';
 import OrderDetailsModal from './components/OrderDetailsModal';
+import UpiReturnModal from './components/UpiReturnModal';
+import { DEFAULT_UPI_SETTINGS, getCachedUpiSettings, buildUpiUrl } from './utils/upi';
+import { buildWhatsAppSlipUrl, openWhatsAppSlip } from './utils/whatsappSlip';
 const HERO_VIDEO_URL = 'https://assets.mixkit.co/videos/preview/mixkit-beautiful-girl-wearing-jewelry-40545-large.mp4';
 
 const HERO_FRAMES = [
@@ -423,6 +431,12 @@ export default function App() {
           setStorePaymentQr(qr);
         }
       }).catch(err => console.error('Firestore getStorePaymentQr error:', err));
+
+      getUpiPaymentSettings().then((upi) => {
+        if (upi) {
+          setStoreUpiSettings(upi);
+        }
+      }).catch(err => console.error('Firestore getUpiPaymentSettings error:', err));
     });
   }, []);
 
@@ -509,6 +523,12 @@ export default function App() {
   const [paymentStep, setPaymentStep] = useState<'shipping' | 'qr_payment' | 'success'>('shipping');
   const [pendingOrder, setPendingOrder] = useState<Order | null>(null);
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
+  // Payment Verification States
+  const [paymentUtr, setPaymentUtr] = useState('');
+  const [paymentAppUsed, setPaymentAppUsed] = useState('Google Pay');
+  const [isPaymentConfirmedChecked, setIsPaymentConfirmedChecked] = useState(false);
+  const [paymentValidationError, setPaymentValidationError] = useState<string | null>(null);
+  const [showManualUtrInCheckout, setShowManualUtrInCheckout] = useState(false);
   const [storePaymentQr, setStorePaymentQr] = useState<string>(() => {
     try {
       return localStorage.getItem('zerish_custom_qr_code') || '';
@@ -516,6 +536,52 @@ export default function App() {
       return '';
     }
   });
+
+  // Direct UPI App Payment & Return state (Option 1)
+  const [storeUpiSettings, setStoreUpiSettings] = useState<UpiPaymentSettings>(() => getCachedUpiSettings());
+  const [isAwaitingUpiReturn, setIsAwaitingUpiReturn] = useState(false);
+  const [upiInitiatedTime, setUpiInitiatedTime] = useState<number | null>(null);
+  const [showUpiReturnModal, setShowUpiReturnModal] = useState(false);
+
+  // Sync UPI settings updates in real-time
+  useEffect(() => {
+    const handleUpiUpdate = () => {
+      setStoreUpiSettings(getCachedUpiSettings());
+    };
+    window.addEventListener('zerish_upi_settings_updated', handleUpiUpdate);
+    window.addEventListener('storage', handleUpiUpdate);
+    return () => {
+      window.removeEventListener('zerish_upi_settings_updated', handleUpiUpdate);
+      window.removeEventListener('storage', handleUpiUpdate);
+    };
+  }, []);
+
+  // Return from UPI App detection (visibility change or focus after app switch)
+  useEffect(() => {
+    const checkReturnFromUpiApp = () => {
+      if (isAwaitingUpiReturn && upiInitiatedTime) {
+        const elapsed = Date.now() - upiInitiatedTime;
+        // User was in external UPI app for more than 1.5 seconds and returned to browser
+        if (elapsed > 1500 && pendingOrder) {
+          setShowUpiReturnModal(true);
+          setIsAwaitingUpiReturn(false);
+        }
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkReturnFromUpiApp();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', checkReturnFromUpiApp);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', checkReturnFromUpiApp);
+    };
+  }, [isAwaitingUpiReturn, upiInitiatedTime, pendingOrder]);
 
   useEffect(() => {
     const handleQrUpdate = () => {
@@ -827,26 +893,15 @@ export default function App() {
     };
     saveCustomer(customerToSave).catch(err => console.error('Error saving customer data:', err));
 
-    // Construct detailed WhatsApp message
-    const itemsText = finalOrder.items.map(item => `- ${item.product.name} x ${item.quantity} (₹${item.product.price.toLocaleString('en-IN')})`).join('\n');
-    const paymentStatusText = isPaid 
-      ? `PAID via UPI QR (Ref: ${txnRef || 'UPI-APP-CONFIRMED'})` 
-      : 'Payment Verification Pending';
-
-    const whatsappMessage = `Hi Zerish Luxe! I just placed an order on your website.\n\n` +
-      `*Order ID:* ${finalOrder.id}\n` +
-      `*Tracking Code:* ${finalOrder.trackingNumber}\n` +
-      `*Customer Name:* ${finalOrder.customerName}\n` +
-      `*Phone:* ${finalOrder.phoneNumber}\n` +
-      `*Delivery Address:* ${finalOrder.address ? finalOrder.address + ', ' : ''}${finalOrder.city}, ${finalOrder.state} - ${finalOrder.postalCode}\n\n` +
-      `*Payment Method:* Instant UPI QR Code\n` +
-      `*Payment Status:* ${paymentStatusText}\n\n` +
-      `*Ordered Items:*\n${itemsText}\n\n` +
-      `*Total Amount:* ₹${finalOrder.total.toLocaleString('en-IN')}\n\n` +
-      `Please confirm receipt of payment and order dispatch details!`;
-
-    const whatsappUrl = `https://wa.me/919916026262?text=${encodeURIComponent(whatsappMessage)}`;
-    setLastWhatsappUrl(whatsappUrl);
+    // Construct professional WhatsApp payment confirmation slip
+    const isWhatsAppSlip = !txnRef || txnRef.startsWith('WA-SLIP');
+    const displayUtr = isWhatsAppSlip ? undefined : txnRef;
+    const whatsappSlipUrl = buildWhatsAppSlipUrl({
+      order: finalOrder,
+      appUsed: paymentAppUsed,
+      utr: displayUtr
+    });
+    setLastWhatsappUrl(whatsappSlipUrl);
 
     setOrders(prev => [finalOrder, ...prev]);
     setConfirmedOrder(finalOrder);
@@ -856,6 +911,61 @@ export default function App() {
     setLastOrderTotal(finalOrder.total);
     setCheckoutSuccess(finalOrder.trackingNumber);
     setPaymentStep('success');
+    // Reset payment verification fields
+    setPaymentUtr('');
+    setIsPaymentConfirmedChecked(false);
+    setPaymentValidationError(null);
+  };
+
+  const handleWhatsAppSlipConfirmation = (appUsedParam?: string) => {
+    if (!pendingOrder) return;
+    const app = appUsedParam || paymentAppUsed || 'Google Pay';
+    const txnRef = `WA-SLIP-${app.toUpperCase().replace(/\s+/g, '')}-${Date.now().toString().slice(-6)}`;
+    
+    // Launch WhatsApp with prefilled confirmation slip
+    openWhatsAppSlip({
+      order: pendingOrder,
+      appUsed: app
+    });
+
+    finalizeOrder(pendingOrder, true, txnRef);
+  };
+
+  const handleValidateAndConfirmPayment = () => {
+    if (!pendingOrder) return;
+
+    const cleanedUtr = paymentUtr.trim().replace(/\s+/g, '');
+    if (!cleanedUtr) {
+      setPaymentValidationError('Please enter your 12-digit UPI Transaction ID or UTR Reference number from your payment app receipt.');
+      return;
+    }
+
+    if (cleanedUtr.length < 8) {
+      setPaymentValidationError('UPI Reference / UTR numbers are typically 12 digits (at least 8 characters required). Please check your payment app receipt.');
+      return;
+    }
+
+    if (!/^[A-Za-z0-9-]+$/.test(cleanedUtr)) {
+      setPaymentValidationError('Please enter a valid alphanumeric UPI Reference / UTR number.');
+      return;
+    }
+
+    if (!isPaymentConfirmedChecked) {
+      setPaymentValidationError('Please confirm that you have completed the payment by checking the confirmation box below.');
+      return;
+    }
+
+    setPaymentValidationError(null);
+    const txnRef = `${paymentAppUsed.toUpperCase().replace(/\s+/g, '')}-${cleanedUtr.toUpperCase()}`;
+    finalizeOrder(pendingOrder, true, txnRef);
+  };
+
+  const handleInitiateAppPayment = (appName: string, upiUrl: string) => {
+    setPaymentAppUsed(appName);
+    setIsAwaitingUpiReturn(true);
+    setUpiInitiatedTime(Date.now());
+    if (paymentValidationError) setPaymentValidationError(null);
+    window.location.href = upiUrl;
   };
 
   const handleAddProduct = async (newProduct: Omit<Product, 'id'>): Promise<void> => {
@@ -1281,6 +1391,15 @@ export default function App() {
             console.error('Error updating store payment QR in Firestore:', err);
           }
         }}
+        storeUpiSettings={storeUpiSettings}
+        onUpdateUpiSettings={async (newUpi) => {
+          setStoreUpiSettings(newUpi);
+          try {
+            await updateUpiPaymentSettings(newUpi);
+          } catch (err) {
+            console.error('Error updating store UPI settings in Firestore:', err);
+          }
+        }}
       />
     );
   }
@@ -1443,6 +1562,13 @@ export default function App() {
                   }`}
                   style={{ transitionProperty: 'opacity, transform' }}
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    const fallbackImg = DEFAULT_HERO_SLIDES[idx % DEFAULT_HERO_SLIDES.length]?.imageUrl || 'https://images.unsplash.com/photo-1626784215021-2e39ac514150?q=85&w=1600&auto=format&fit=crop';
+                    if (target.src !== fallbackImg) {
+                      target.src = fallbackImg;
+                    }
+                  }}
                 />
               ))}
               {/* Soft ambient overlay */}
@@ -2645,10 +2771,10 @@ export default function App() {
                                 href={lastWhatsappUrl || `https://wa.me/919916026262`}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] uppercase tracking-widest font-extrabold transition-all flex items-center justify-center gap-2 rounded-xs"
+                                className="w-full py-3 bg-[#25D366] hover:bg-[#1EBE5D] text-white text-xs uppercase tracking-widest font-extrabold transition-all flex items-center justify-center gap-2 rounded-xs shadow-sm cursor-pointer"
                               >
-                                <MessageCircle className="w-3.5 h-3.5" />
-                                <span>Chat with Curator on WhatsApp</span>
+                                <MessageCircle className="w-4 h-4" />
+                                <span>Send / View WhatsApp Payment Slip</span>
                               </a>
                             </div>
 
@@ -2683,13 +2809,13 @@ export default function App() {
                             <div className="bg-[#FAF8F6] border border-espresso/15 p-4 rounded-xs text-center space-y-4">
                               <div className="text-center space-y-1">
                                 <span className="inline-block px-2.5 py-0.5 bg-emerald-100 text-emerald-800 text-[9px] font-extrabold uppercase tracking-widest rounded-full">
-                                  Final Step: Scan & Pay via UPI QR
+                                  Payment Step
                                 </span>
                                 <h4 className="font-serif text-base font-bold text-espresso">
-                                  Scan QR Code to Pay
+                                  Choose Payment Option
                                 </h4>
                                 <p className="text-[11px] text-espresso/70">
-                                  Scan with Google Pay, PhonePe, Paytm, BHIM, or any UPI app
+                                  Select QR code or pay directly via your UPI app
                                 </p>
                               </div>
 
@@ -2714,28 +2840,193 @@ export default function App() {
                                 )}
                               </div>
 
-                              {/* Embedded UPI QR Code */}
+                              {/* Embedded UPI QR Code with Direct App Pay */}
                               <PaymentQRCode 
                                 amount={pendingOrder.total}
                                 orderId={pendingOrder.id}
                                 customerName={pendingOrder.customerName}
                                 customQrImageUrl={storePaymentQr}
+                                upiId={storeUpiSettings.upiId}
+                                merchantName={storeUpiSettings.merchantName}
+                                note={storeUpiSettings.defaultNote}
+                                onInitiateAppPayment={handleInitiateAppPayment}
                               />
 
-                              {/* Confirm Payment Button */}
-                              <button
-                                onClick={() => {
-                                  finalizeOrder(pendingOrder, true, 'PAID-VIA-QR');
-                                }}
-                                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs uppercase tracking-widest font-extrabold shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer rounded-xs"
-                              >
-                                <Check className="w-4 h-4" />
-                                <span>I Have Completed Payment (₹{pendingOrder.total.toLocaleString('en-IN')})</span>
-                              </button>
+                              {/* Awaiting Return Indicator Banner */}
+                              {isAwaitingUpiReturn && (
+                                <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-xs text-xs text-amber-950 flex items-start space-x-2.5 shadow-2xs animate-pulse">
+                                  <div className="w-2.5 h-2.5 rounded-full bg-amber-600 mt-1 shrink-0" />
+                                  <div>
+                                    <span className="font-bold block">Payment Initiated in {paymentAppUsed}!</span>
+                                    <span className="text-[11px] text-amber-900 leading-snug">
+                                      Please complete the payment in your UPI app. When you switch back to this tab, you will be prompted to enter your 12-digit UTR reference to immediately confirm your order.
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Payment Confirmation Section */}
+                              <div className="bg-white border border-espresso/15 rounded-xs p-4 text-left space-y-4 shadow-2xs">
+                                <div className="border-b border-espresso/10 pb-2.5">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-1.5 text-espresso font-serif text-sm font-bold">
+                                      <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                                      <span>Confirm Payment</span>
+                                    </div>
+                                    <span className="text-[9px] uppercase tracking-wider font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                      Zero UTR Required
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-espresso/70 mt-0.5">
+                                    Transferred <strong>₹{pendingOrder.total.toLocaleString('en-IN')}</strong>? Choose your confirmation method below:
+                                  </p>
+                                </div>
+
+                                {/* Step A: Select UPI App Used */}
+                                <div>
+                                  <label className="block text-[10px] uppercase tracking-wider font-extrabold text-espresso mb-1.5">
+                                    UPI App Used to Pay
+                                  </label>
+                                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                                    {['Google Pay', 'PhonePe', 'Paytm', 'BHIM', 'Cred', 'Other'].map((app) => (
+                                      <button
+                                        key={app}
+                                        type="button"
+                                        onClick={() => {
+                                          setPaymentAppUsed(app);
+                                          if (paymentValidationError) setPaymentValidationError(null);
+                                        }}
+                                        className={`py-1.5 px-1 text-[10px] font-bold rounded-xs border transition-all cursor-pointer text-center ${
+                                          paymentAppUsed === app 
+                                            ? 'bg-espresso text-white border-espresso shadow-xs' 
+                                            : 'bg-[#FAF8F6] text-espresso/80 border-espresso/15 hover:border-espresso/40'
+                                        }`}
+                                      >
+                                        {app}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {/* PRIMARY 1-CLICK OPTION: WhatsApp Confirmation Slip */}
+                                <div className="p-3.5 bg-emerald-50/80 border border-emerald-300 rounded-xs space-y-2.5">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-1.5">
+                                      <div className="w-6 h-6 rounded-full bg-[#25D366] text-white flex items-center justify-center shadow-xs">
+                                        <MessageCircle className="w-3.5 h-3.5" />
+                                      </div>
+                                      <span className="text-xs font-bold text-emerald-950">
+                                        WhatsApp Confirmation Slip
+                                      </span>
+                                    </div>
+                                    <span className="text-[8px] uppercase tracking-widest font-extrabold bg-emerald-200/90 text-emerald-900 px-2 py-0.5 rounded-full">
+                                      1-Click • Recommended
+                                    </span>
+                                  </div>
+
+                                  <p className="text-[11px] text-emerald-900/90 leading-snug">
+                                    Creates your order instantly and opens WhatsApp with a pre-filled payment confirmation slip. You can attach your payment screenshot in the chat.
+                                  </p>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleWhatsAppSlipConfirmation()}
+                                    className="w-full py-3.5 bg-[#25D366] hover:bg-[#1EBE5D] active:scale-[0.99] text-white text-xs uppercase tracking-widest font-extrabold shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer rounded-xs"
+                                  >
+                                    <MessageCircle className="w-4 h-4" />
+                                    <span>Send WhatsApp Confirmation Slip (1-Click) →</span>
+                                  </button>
+                                </div>
+
+                                {/* SECONDARY / MANUAL OPTION: Enter 12-Digit UTR */}
+                                <div className="border-t border-espresso/10 pt-2.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowManualUtrInCheckout(!showManualUtrInCheckout)}
+                                    className="w-full text-left py-1 text-[11px] text-espresso/70 hover:text-espresso font-semibold flex items-center justify-between cursor-pointer"
+                                  >
+                                    <span>Or verify with 12-digit UPI UTR instead (Optional)</span>
+                                    {showManualUtrInCheckout ? (
+                                      <ChevronUp className="w-3.5 h-3.5 text-taupe" />
+                                    ) : (
+                                      <ChevronDown className="w-3.5 h-3.5 text-taupe" />
+                                    )}
+                                  </button>
+
+                                  {showManualUtrInCheckout && (
+                                    <div className="mt-3 space-y-3 pt-2 border-t border-espresso/5">
+                                      <div>
+                                        <div className="flex items-center justify-between mb-1">
+                                          <label className="block text-[10px] uppercase tracking-wider font-extrabold text-espresso">
+                                            UPI Transaction ID / UTR Number
+                                          </label>
+                                          <span className="text-[9px] text-taupe font-semibold">12-digit reference</span>
+                                        </div>
+                                        <input
+                                          type="text"
+                                          placeholder="e.g. 428910293847 or UPI Ref No."
+                                          value={paymentUtr}
+                                          onChange={(e) => {
+                                            setPaymentUtr(e.target.value);
+                                            if (paymentValidationError) setPaymentValidationError(null);
+                                          }}
+                                          className={`w-full border p-2.5 text-xs bg-[#FAF8F6] font-mono tracking-wider focus:outline-hidden focus:bg-white transition-colors rounded-xs ${
+                                            paymentValidationError && (!paymentUtr.trim() || paymentUtr.trim().length < 8)
+                                              ? 'border-red-500 bg-red-50/20'
+                                              : 'border-espresso/25 focus:border-espresso'
+                                          }`}
+                                        />
+                                        <p className="text-[10px] text-espresso/60 mt-1">
+                                          💡 In {paymentAppUsed || 'your UPI app'} payment receipt, look for <strong>UPI Transaction ID</strong> or <strong>UTR</strong>.
+                                        </p>
+                                      </div>
+
+                                      <div>
+                                        <label className="flex items-start space-x-2.5 cursor-pointer select-none">
+                                          <input
+                                            type="checkbox"
+                                            checked={isPaymentConfirmedChecked}
+                                            onChange={(e) => {
+                                              setIsPaymentConfirmedChecked(e.target.checked);
+                                              if (paymentValidationError) setPaymentValidationError(null);
+                                            }}
+                                            className="mt-0.5 h-4 w-4 rounded-xs border-espresso/30 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                                          />
+                                          <span className="text-[11px] text-espresso/85 leading-snug">
+                                            I confirm transfer of <strong>₹{pendingOrder.total.toLocaleString('en-IN')}</strong> and that the UTR entered above is accurate.
+                                          </span>
+                                        </label>
+                                      </div>
+
+                                      {paymentValidationError && (
+                                        <div className="p-2.5 bg-red-50 border border-red-300 rounded-xs flex items-start space-x-2 text-red-700 text-xs">
+                                          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
+                                          <div>
+                                            <strong className="font-bold block">Validation Required:</strong>
+                                            <span>{paymentValidationError}</span>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      <button
+                                        type="button"
+                                        onClick={handleValidateAndConfirmPayment}
+                                        className="w-full py-3 bg-espresso hover:bg-terracotta text-white text-xs uppercase tracking-widest font-extrabold shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer rounded-xs"
+                                      >
+                                        <Check className="w-4 h-4" />
+                                        <span>Verify via UTR (₹{pendingOrder.total.toLocaleString('en-IN')})</span>
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
 
                               <button
                                 onClick={() => {
                                   setPaymentStep('shipping');
+                                  setPaymentUtr('');
+                                  setIsPaymentConfirmedChecked(false);
+                                  setPaymentValidationError(null);
                                 }}
                                 className="w-full py-2 text-[10px] text-espresso/70 hover:text-espresso underline cursor-pointer"
                               >
@@ -2760,7 +3051,7 @@ export default function App() {
                                   Customer & Delivery Details
                                 </h3>
                                 <p className="text-[11px] text-espresso/60">
-                                  Please enter your details. The Payment QR Code will appear next.
+                                  Please enter your details to proceed to payment options.
                                 </p>
                               </div>
                               
@@ -2869,19 +3160,19 @@ export default function App() {
                                 
                                 <div className="flex items-start gap-3 p-3 border border-terracotta/30 bg-terracotta/5 rounded-xs">
                                   <div className="w-8 h-8 rounded-full bg-espresso text-linen flex items-center justify-center flex-shrink-0 mt-0.5 shadow-xs">
-                                    <QrCode className="w-4 h-4" />
+                                    <Smartphone className="w-4 h-4" />
                                   </div>
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center justify-between">
                                       <span className="text-xs font-bold text-espresso flex items-center gap-1.5">
-                                        <span>Instant UPI QR Code</span>
+                                        <span>UPI Payment</span>
                                       </span>
                                       <span className="text-[8px] uppercase tracking-wider font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-full">
                                         100% Secure
                                       </span>
                                     </div>
                                     <p className="text-[10px] text-taupe mt-0.5 leading-snug">
-                                      Your order payment QR code will be generated in the final step. Pay via Google Pay, PhonePe, Paytm, BHIM, or any banking app.
+                                      Choose between QR code or pay directly via your UPI app in the next step.
                                     </p>
                                   </div>
                                 </div>
@@ -2891,8 +3182,8 @@ export default function App() {
                                 type="submit"
                                 className="w-full py-3.5 bg-espresso text-[#FAF8F6] hover:bg-terracotta text-xs uppercase tracking-widest font-extrabold shadow-md transition-all mt-3 cursor-pointer flex items-center justify-center gap-2 rounded-xs"
                               >
-                                <QrCode className="w-4 h-4" />
-                                <span>Continue to Payment QR Code (₹{grandTotal.toLocaleString('en-IN')}) →</span>
+                                <CreditCard className="w-4 h-4" />
+                                <span>Proceed to Payment (₹{grandTotal.toLocaleString('en-IN')}) →</span>
                               </button>
                             </form>
                           </div>
@@ -3067,6 +3358,41 @@ export default function App() {
       <TermsConditionsModal 
         isOpen={isTermsOpen}
         onClose={() => setIsTermsOpen(false)}
+      />
+
+      {/* UPI App Return & Confirmation Dialog (Option 1) */}
+      <UpiReturnModal
+        isOpen={showUpiReturnModal}
+        onClose={() => setShowUpiReturnModal(false)}
+        orderId={pendingOrder?.id}
+        amount={pendingOrder?.total || 0}
+        selectedApp={paymentAppUsed}
+        onConfirmPayment={(utr, app, viaWhatsApp) => {
+          setPaymentAppUsed(app);
+          setShowUpiReturnModal(false);
+          if (pendingOrder) {
+            if (viaWhatsApp) {
+              handleWhatsAppSlipConfirmation(app);
+            } else {
+              setPaymentUtr(utr);
+              setIsPaymentConfirmedChecked(true);
+              const txnRef = `${app.toUpperCase().replace(/\s+/g, '')}-${utr.toUpperCase()}`;
+              finalizeOrder(pendingOrder, true, txnRef);
+            }
+          }
+        }}
+        onReopenApp={() => {
+          if (pendingOrder) {
+            const directUrl = buildUpiUrl({
+              upiId: storeUpiSettings.upiId,
+              merchantName: storeUpiSettings.merchantName,
+              amount: pendingOrder.total,
+              orderId: pendingOrder.id,
+              note: storeUpiSettings.defaultNote
+            });
+            window.location.href = directUrl;
+          }
+        }}
       />
 
       {/* 9. STANDALONE SCAN & PAY QR MODAL */}
