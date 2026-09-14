@@ -24,7 +24,7 @@ export default function OrderDetailsModal({
   };
 
   const handleShareWhatsApp = () => {
-    let msg = `✨ *ZERISH LUXE FINE JEWELLERY - ORDER RECEIPT* ✨\n\n`;
+    let msg = `✨ *ZERISH LUXE ANTI_TARNISH JEWELLERY - ORDER RECEIPT* ✨\n\n`;
     msg += `📄 *Order ID:* ${order.id}\n`;
     msg += `🚚 *Tracking Reference:* ${order.trackingNumber}\n`;
     msg += `📅 *Date:* ${order.date}\n`;
@@ -191,9 +191,7 @@ export default function OrderDetailsModal({
               </div>
               <div className="mt-1 flex items-center space-x-2">
                 <span className="text-xs font-bold text-espresso">
-                  {order.paymentMethod === 'UPI_QR' 
-                    ? 'UPI QR Code Scan & Pay' 
-                    : 'Instant UPI Payment'}
+                  UPI Payment
                 </span>
               </div>
               {order.upiTransactionRef && (
