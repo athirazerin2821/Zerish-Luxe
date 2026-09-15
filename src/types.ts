@@ -128,7 +128,7 @@ export interface HeroCarouselSettings {
 }
 
 export interface UpiPaymentSettings {
-  upiId: string; // e.g. "zerishluxe@okhdfcbank" or "9916026262@upi"
+  upiId: string; // e.g. "zerishluxe@okhdfcbank" or "9790173288@upi"
   merchantName: string; // e.g. "Zerish Luxe Anti-Tarnish Jewellery"
   defaultNote?: string; // e.g. "Order from Zerish Luxe"
   isDirectAppPayEnabled: boolean;
