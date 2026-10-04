@@ -1,15 +1,16 @@
 import { Product, Testimonial, HeroSlide } from './types';
 
-const luxuryVneckAdCuffBannerImg = '/src/assets/images/luxury_vneck_ad_cuff_banner_1783757089887.jpg';
-const luxuryJewelryVNeckBannerImg = '/src/assets/images/luxury_jewelry_v_neck_banner_1783756960523.jpg';
-const luxuryJewelryModestBannerV2Img = '/src/assets/images/luxury_jewelry_modest_banner_v2_1783756827703.jpg';
-const goldJewelrySatinFlowersImg = '/src/assets/images/gold_jewelry_satin_flowers_1783581310352.jpg';
-const eleganceJewelryModelImg = '/src/assets/images/elegance_jewelry_model_1783579675029.jpg';
+const luxuryJewelryModestBannerImg = '/assets/images/luxury_jewelry_modest_banner_1783756629266.jpg';
+const luxuryVneckAdCuffBannerImg = '/assets/images/luxury_vneck_ad_cuff_banner_1783757089887.jpg';
+const luxuryJewelryModestBannerV2Img = '/assets/images/luxury_jewelry_modest_banner_v2_1783756827703.jpg';
+const luxuryJewelryVNeckBannerImg = '/assets/images/luxury_jewelry_v_neck_banner_1783756960523.jpg';
+const goldJewelrySatinFlowersImg = '/assets/images/gold_jewelry_satin_flowers_1783581310352.jpg';
+const eleganceJewelryModelImg = '/assets/images/elegance_jewelry_model_1783579675029.jpg';
 
 export const DEFAULT_HERO_SLIDES: HeroSlide[] = [
   {
     id: 'hero-slide-1',
-    imageUrl: luxuryVneckAdCuffBannerImg,
+    imageUrl: luxuryJewelryModestBannerImg,
     badge: '✦ 18K Anti-Tarnish Gold',
     title: 'Minimal. Timeless.',
     subtitle: 'Made to Last.',
@@ -22,7 +23,7 @@ export const DEFAULT_HERO_SLIDES: HeroSlide[] = [
   },
   {
     id: 'hero-slide-2',
-    imageUrl: luxuryJewelryVNeckBannerImg,
+    imageUrl: luxuryJewelryModestBannerV2Img,
     badge: '✨ Exclusive Craftsmanship',
     title: 'Everyday Luxury.',
     subtitle: 'Pure Subtle Glow.',
@@ -35,7 +36,7 @@ export const DEFAULT_HERO_SLIDES: HeroSlide[] = [
   },
   {
     id: 'hero-slide-3',
-    imageUrl: luxuryJewelryModestBannerV2Img,
+    imageUrl: luxuryJewelryVNeckBannerImg,
     badge: '💎 Lifetime Lustre',
     title: 'Heirloom Finish.',
     subtitle: 'Forever In Shine.',
@@ -44,6 +45,32 @@ export const DEFAULT_HERO_SLIDES: HeroSlide[] = [
     ctaTab: 'best-sellers',
     secondaryCtaText: 'Shop Bracelets',
     secondaryCtaTab: 'bracelets',
+    isActive: true
+  },
+  {
+    id: 'hero-slide-4',
+    imageUrl: luxuryVneckAdCuffBannerImg,
+    badge: '🌊 Zero Tarnish Guarantee',
+    title: 'Waterproof All-Day Wear.',
+    subtitle: 'Gym, Shower & Swim Ready.',
+    description: 'Engineered with cutting-edge 18K vacuum PVD plating. Never worry about sweat, perfumes, or water dulling your shine.',
+    ctaText: 'Shop Daily Wear',
+    ctaTab: 'earrings',
+    secondaryCtaText: 'View Rings',
+    secondaryCtaTab: 'rings',
+    isActive: true
+  },
+  {
+    id: 'hero-slide-5',
+    imageUrl: eleganceJewelryModelImg,
+    badge: '👑 Curated Luxe',
+    title: 'Elegance Redefined.',
+    subtitle: 'Grace in Every Detail.',
+    description: 'Minimalist statement jewellery created for women who appreciate modern aesthetics without sacrificing enduring quality.',
+    ctaText: 'Shop All Jewellery',
+    ctaTab: 'all',
+    secondaryCtaText: 'Best Sellers',
+    secondaryCtaTab: 'best-sellers',
     isActive: true
   }
 ];
@@ -137,7 +164,7 @@ export const FESTIVE_HERO_PRESETS: FestivePreset[] = [
         badge: '🌸 Akshaya Tritiya Auspicious Gold',
         title: 'Prosperity In Pure Gold.',
         subtitle: 'Begin An Auspicious Journey.',
-        description: 'Bring home lasting prosperity with fine handpicked anti-tarnish jewelry. Timeless beauty made to be passed down through generations.',
+        description: 'Bring home lasting prosperity with handpicked anti-tarnish jewelry. Timeless beauty made to be passed down through generations.',
         ctaText: 'Shop Auspicious Gold',
         ctaTab: 'chains',
         secondaryCtaText: 'Explore Necklaces',
@@ -714,7 +741,7 @@ export function formatWhatsAppProductMessage(product: Product): string {
   const priceFormatted = `₹${product.price.toLocaleString('en-IN')}`;
   const originalPriceFormatted = product.originalPrice ? `₹${product.originalPrice.toLocaleString('en-IN')}` : '';
   
-  let msg = `✨ *ZERISH LUXE FINE JEWELLERY* ✨\n\n`;
+  let msg = `✨ *ZERISH LUXE ANTI TARNISH JEWELLERY* ✨\n\n`;
   msg += `💍 *${product.name}*\n`;
   msg += `🏷️ *Price:* ${priceFormatted}`;
   if (product.originalPrice && product.originalPrice > product.price) {
