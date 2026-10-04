@@ -2531,12 +2531,20 @@ export default function SellerPortal({
                               Auto-Play Slide Interval:
                             </label>
                             <select
-                              value={localHeroSettings.autoPlayIntervalSeconds || 6}
-                              onChange={(e) => setLocalHeroSettings(prev => ({ ...prev, autoPlayIntervalSeconds: Number(e.target.value) }))}
+                              value={localHeroSettings.autoPlay ? (localHeroSettings.autoPlayIntervalSeconds || 6) : 0}
+                              onChange={(e) => {
+                                const val = Number(e.target.value);
+                                setLocalHeroSettings(prev => ({ 
+                                  ...prev, 
+                                  autoPlay: val > 0, 
+                                  autoPlayIntervalSeconds: val 
+                                }));
+                              }}
                               className="border border-espresso/20 p-1 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden rounded-xs"
                             >
+                              <option value={0}>Disabled / Keep Model Image Static (Recommended)</option>
                               <option value={4}>4 Seconds (Fast)</option>
-                              <option value={6}>6 Seconds (Balanced - Recommended)</option>
+                              <option value={6}>6 Seconds (Balanced)</option>
                               <option value={8}>8 Seconds (Relaxed)</option>
                               <option value={10}>10 Seconds (Slow)</option>
                             </select>
@@ -3316,5 +3324,4 @@ export default function SellerPortal({
       </main>
     </div>
   );
-  
 }
