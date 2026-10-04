@@ -30,16 +30,14 @@ import {
   ChevronLeft,
   ChevronRight,
   Share2,
-  QrCode,
   CreditCard,
   AlertCircle,
-  Smartphone,
   ChevronUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 // Data and Types
-import { Product, CartItem, Order, Coupon, OrderDetails, Testimonial, UserAccount, CategorySetting, InstagramPost, HeroSlide, HeroCarouselSettings, UpiPaymentSettings } from './types';
+import { Product, CartItem, Order, Coupon, OrderDetails, Testimonial, UserAccount, CategorySetting, InstagramPost, HeroSlide, HeroCarouselSettings } from './types';
 import { INITIAL_PRODUCTS, TESTIMONIALS, DEFAULT_HERO_SLIDES, shareProductToWhatsApp } from './data';
 
 // Firebase Services
@@ -74,10 +72,6 @@ import {
   deleteInstagramPost,
   getHeroCarouselSettings,
   updateHeroCarouselSettings,
-  getStorePaymentQr,
-  updateStorePaymentQr,
-  getUpiPaymentSettings,
-  updateUpiPaymentSettings,
   DEFAULT_CATEGORIES
 } from './services/firebaseDb';
 
@@ -90,12 +84,9 @@ import TermsConditionsModal from './components/TermsConditionsModal';
 import { SearchDrawer, WishlistDrawer, AccountDrawer } from './components/Drawers';
 import ProductModal from './components/ProductModal';
 import SellerPortal from './components/SellerPortal';
-import PaymentQRCode from './components/PaymentQRCode';
-import ScanAndPayModal from './components/ScanAndPayModal';
 import OrderDetailsModal from './components/OrderDetailsModal';
-import UpiReturnModal from './components/UpiReturnModal';
-import { DEFAULT_UPI_SETTINGS, getCachedUpiSettings, buildUpiUrl } from './utils/upi';
-import { buildWhatsAppSlipUrl, openWhatsAppSlip } from './utils/whatsappSlip';
+import { buildWhatsAppEnquiryUrl, openWhatsAppEnquiry } from './utils/whatsappSlip';
+import { generateOrderAndEnquiryIds } from './utils/orderIdGenerator';
 const HERO_VIDEO_URL = 'https://assets.mixkit.co/videos/preview/mixkit-beautiful-girl-wearing-jewelry-40545-large.mp4';
 
 const HERO_FRAMES = [
@@ -279,7 +270,18 @@ export default function App() {
     try {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed)) {
-        const filtered = parsed.filter((c: any) => c && typeof c === 'object' && c.tabId && c.title);
+        let filtered = parsed.filter((c: any) => c && typeof c === 'object' && c.tabId && c.title);
+        const hasNecklaces = filtered.some((c: any) => c.tabId === 'necklaces');
+        if (!hasNecklaces) {
+          const necklaceCat = DEFAULT_CATEGORIES.find(c => c.tabId === 'necklaces');
+          if (necklaceCat) {
+            filtered = [
+              filtered[0],
+              necklaceCat,
+              ...filtered.slice(1)
+            ];
+          }
+        }
         return filtered.length > 0 ? filtered : DEFAULT_CATEGORIES;
       }
       return DEFAULT_CATEGORIES;
@@ -294,7 +296,14 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (parsed && Array.isArray(parsed.slides) && parsed.slides.length > 0) {
-          return parsed;
+          const sanitizedSlides = parsed.slides.map((s: any, idx: number) => {
+            let img = s.imageUrl;
+            if (!img || img.startsWith('/src/') || (img.startsWith('/assets/images/'))) {
+              img = DEFAULT_HERO_SLIDES[idx % DEFAULT_HERO_SLIDES.length]?.imageUrl;
+            }
+            return { ...s, imageUrl: img };
+          });
+          return { ...parsed, slides: sanitizedSlides };
         }
       } catch (e) {}
     }
@@ -426,18 +435,6 @@ export default function App() {
           setHeroCarouselSettings(settings);
         }
       }).catch(err => console.error('Firestore getHeroCarouselSettings error:', err));
-
-      getStorePaymentQr().then((qr) => {
-        if (qr) {
-          setStorePaymentQr(qr);
-        }
-      }).catch(err => console.error('Firestore getStorePaymentQr error:', err));
-
-      getUpiPaymentSettings().then((upi) => {
-        if (upi) {
-          setStoreUpiSettings(upi);
-        }
-      }).catch(err => console.error('Firestore getUpiPaymentSettings error:', err));
     });
   }, []);
 
@@ -518,84 +515,8 @@ export default function App() {
 
   // --- CHECKOUT PROCESS ---
   const [isCheckingOut, setIsCheckingOut] = useState(false);
-  const [isScanAndPayOpen, setIsScanAndPayOpen] = useState(false);
   const [selectedOrderForDetails, setSelectedOrderForDetails] = useState<Order | null>(null);
-  const paymentMethod: 'UPI_QR' = 'UPI_QR';
-  const [paymentStep, setPaymentStep] = useState<'shipping' | 'qr_payment' | 'success'>('shipping');
-  const [pendingOrder, setPendingOrder] = useState<Order | null>(null);
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
-  // Payment Verification States
-  const [paymentUtr, setPaymentUtr] = useState('');
-  const [paymentAppUsed, setPaymentAppUsed] = useState('Google Pay');
-  const [isPaymentConfirmedChecked, setIsPaymentConfirmedChecked] = useState(false);
-  const [paymentValidationError, setPaymentValidationError] = useState<string | null>(null);
-  const [showManualUtrInCheckout, setShowManualUtrInCheckout] = useState(false);
-  const [storePaymentQr, setStorePaymentQr] = useState<string>(() => {
-    try {
-      return localStorage.getItem('zerish_custom_qr_code') || '';
-    } catch {
-      return '';
-    }
-  });
-
-  // Direct UPI App Payment & Return state (Option 1)
-  const [storeUpiSettings, setStoreUpiSettings] = useState<UpiPaymentSettings>(() => getCachedUpiSettings());
-  const [isAwaitingUpiReturn, setIsAwaitingUpiReturn] = useState(false);
-  const [upiInitiatedTime, setUpiInitiatedTime] = useState<number | null>(null);
-  const [showUpiReturnModal, setShowUpiReturnModal] = useState(false);
-
-  // Sync UPI settings updates in real-time
-  useEffect(() => {
-    const handleUpiUpdate = () => {
-      setStoreUpiSettings(getCachedUpiSettings());
-    };
-    window.addEventListener('zerish_upi_settings_updated', handleUpiUpdate);
-    window.addEventListener('storage', handleUpiUpdate);
-    return () => {
-      window.removeEventListener('zerish_upi_settings_updated', handleUpiUpdate);
-      window.removeEventListener('storage', handleUpiUpdate);
-    };
-  }, []);
-
-  // Return from UPI App detection (visibility change or focus after app switch)
-  useEffect(() => {
-    const checkReturnFromUpiApp = () => {
-      if (isAwaitingUpiReturn && upiInitiatedTime) {
-        const elapsed = Date.now() - upiInitiatedTime;
-        // User was in external UPI app for more than 1.5 seconds and returned to browser
-        if (elapsed > 1500 && pendingOrder) {
-          setShowUpiReturnModal(true);
-          setIsAwaitingUpiReturn(false);
-        }
-      }
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        checkReturnFromUpiApp();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', checkReturnFromUpiApp);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', checkReturnFromUpiApp);
-    };
-  }, [isAwaitingUpiReturn, upiInitiatedTime, pendingOrder]);
-
-  useEffect(() => {
-    const handleQrUpdate = () => {
-      try {
-        const qr = localStorage.getItem('zerish_custom_qr_code') || '';
-        setStorePaymentQr(qr);
-      } catch {
-        // ignore
-      }
-    };
-    window.addEventListener('custom_qr_code_updated', handleQrUpdate);
-    return () => window.removeEventListener('custom_qr_code_updated', handleQrUpdate);
-  }, []);
 
   const [checkoutDetails, setCheckoutDetails] = useState<OrderDetails>({
     customerName: '',
@@ -837,42 +758,30 @@ export default function App() {
     }
     const finalTotal = Math.max(0, subtotal - discount + shippingFee);
 
-    const trackingCode = `ZL-TRACK-${Math.floor(1000 + Math.random() * 9000)}`;
-    const newOrderId = `ZL-${Math.floor(1000 + Math.random() * 9000)}`;
+    const { enquiryNumber, orderId: newOrderId } = generateOrderAndEnquiryIds(orders);
     const newOrder: Order = {
       id: newOrderId,
       customerName: checkoutDetails.customerName.trim(),
       phoneNumber: checkoutDetails.phoneNumber.trim(),
-      email: checkoutDetails.email?.trim(),
-      address: checkoutDetails.address?.trim(),
+      email: checkoutDetails.email?.trim() || '',
+      address: checkoutDetails.address?.trim() || '',
       city: checkoutDetails.city.trim(),
       state: checkoutDetails.state.trim(),
       postalCode: checkoutDetails.postalCode.trim(),
       items: [...cart],
       total: finalTotal,
       discount,
-      couponApplied: appliedCoupon?.code,
+      ...(appliedCoupon?.code ? { couponApplied: appliedCoupon.code } : {}),
       status: 'Pending',
       date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      trackingNumber: trackingCode,
+      trackingNumber: enquiryNumber,
       isPaid: false,
-      paymentMethod: 'UPI_QR'
-    };
-
-    setPendingOrder(newOrder);
-    setPaymentStep('qr_payment');
-  };
-
-  const finalizeOrder = (orderToSave: Order, isPaid: boolean, txnRef?: string) => {
-    const finalOrder: Order = {
-      ...orderToSave,
-      isPaid,
-      upiTransactionRef: txnRef || orderToSave.upiTransactionRef
+      paymentMethod: 'WhatsApp Enquiry'
     };
 
     // Update product stock counts
     setProducts(prev => prev.map(p => {
-      const cartItem = finalOrder.items.find(item => item.product.id === p.id);
+      const cartItem = newOrder.items.find(item => item.product.id === p.id);
       if (cartItem) {
         return { ...p, stock: Math.max(0, (p.stock || 15) - cartItem.quantity) };
       }
@@ -880,93 +789,33 @@ export default function App() {
     }));
 
     // Save order in Firestore
-    createOrder(finalOrder).catch(err => console.error('Error creating order in Firestore:', err));
+    createOrder(newOrder).catch(err => console.error('Error creating order in Firestore:', err));
 
     // Save customer/guest details to Firestore
     const customerToSave: UserAccount = currentUser || {
-      name: finalOrder.customerName,
-      phoneNumber: finalOrder.phoneNumber,
-      email: finalOrder.email,
-      city: finalOrder.city,
-      state: finalOrder.state,
-      postalCode: finalOrder.postalCode,
+      name: newOrder.customerName,
+      phoneNumber: newOrder.phoneNumber,
+      email: newOrder.email || '',
+      address: newOrder.address || '',
+      city: newOrder.city,
+      state: newOrder.state,
+      postalCode: newOrder.postalCode,
       joinDate: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
     };
     saveCustomer(customerToSave).catch(err => console.error('Error saving customer data:', err));
 
-    // Construct professional WhatsApp payment confirmation slip
-    const isWhatsAppSlip = !txnRef || txnRef.startsWith('WA-SLIP');
-    const displayUtr = isWhatsAppSlip ? undefined : txnRef;
-    const whatsappSlipUrl = buildWhatsAppSlipUrl({
-      order: finalOrder,
-      appUsed: paymentAppUsed,
-      utr: displayUtr
-    });
-    setLastWhatsappUrl(whatsappSlipUrl);
+    // Open WhatsApp directly with the itemized enquiry
+    const whatsappUrl = buildWhatsAppEnquiryUrl({ order: newOrder });
+    openWhatsAppEnquiry({ order: newOrder });
+    setLastWhatsappUrl(whatsappUrl);
 
-    setOrders(prev => [finalOrder, ...prev]);
-    setConfirmedOrder(finalOrder);
+    setOrders(prev => [newOrder, ...prev]);
+    setConfirmedOrder(newOrder);
     setCart([]);
     setAppliedCoupon(null);
     setCouponInput('');
-    setLastOrderTotal(finalOrder.total);
-    setCheckoutSuccess(finalOrder.trackingNumber);
-    setPaymentStep('success');
-    // Reset payment verification fields
-    setPaymentUtr('');
-    setIsPaymentConfirmedChecked(false);
-    setPaymentValidationError(null);
-  };
-
-  const handleWhatsAppSlipConfirmation = (appUsedParam?: string) => {
-    if (!pendingOrder) return;
-    const app = appUsedParam || paymentAppUsed || 'Google Pay';
-    const txnRef = `WA-SLIP-${app.toUpperCase().replace(/\s+/g, '')}-${Date.now().toString().slice(-6)}`;
-    
-    // Launch WhatsApp with prefilled confirmation slip
-    openWhatsAppSlip({
-      order: pendingOrder,
-      appUsed: app
-    });
-
-    finalizeOrder(pendingOrder, true, txnRef);
-  };
-
-  const handleValidateAndConfirmPayment = () => {
-    if (!pendingOrder) return;
-
-    const cleanedUtr = paymentUtr.trim().replace(/\s+/g, '');
-    if (!cleanedUtr) {
-      setPaymentValidationError('Please enter your 12-digit UPI Transaction ID or UTR Reference number from your payment app receipt.');
-      return;
-    }
-
-    if (cleanedUtr.length < 8) {
-      setPaymentValidationError('UPI Reference / UTR numbers are typically 12 digits (at least 8 characters required). Please check your payment app receipt.');
-      return;
-    }
-
-    if (!/^[A-Za-z0-9-]+$/.test(cleanedUtr)) {
-      setPaymentValidationError('Please enter a valid alphanumeric UPI Reference / UTR number.');
-      return;
-    }
-
-    if (!isPaymentConfirmedChecked) {
-      setPaymentValidationError('Please confirm that you have completed the payment by checking the confirmation box below.');
-      return;
-    }
-
-    setPaymentValidationError(null);
-    const txnRef = `${paymentAppUsed.toUpperCase().replace(/\s+/g, '')}-${cleanedUtr.toUpperCase()}`;
-    finalizeOrder(pendingOrder, true, txnRef);
-  };
-
-  const handleInitiateAppPayment = (appName: string, upiUrl: string) => {
-    setPaymentAppUsed(appName);
-    setIsAwaitingUpiReturn(true);
-    setUpiInitiatedTime(Date.now());
-    if (paymentValidationError) setPaymentValidationError(null);
-    window.location.href = upiUrl;
+    setLastOrderTotal(newOrder.total);
+    setCheckoutSuccess(newOrder.trackingNumber);
   };
 
   const handleAddProduct = async (newProduct: Omit<Product, 'id'>): Promise<void> => {
@@ -1168,7 +1017,8 @@ export default function App() {
 
     // 1. Tab selection
     let matchTab = false;
-    if (activeTab === 'new-arrivals') matchTab = !!p.isNew;
+    if (activeTab === 'all' || activeTab === 'all-jewellery') matchTab = true;
+    else if (activeTab === 'new-arrivals') matchTab = !!p.isNew;
     else if (activeTab === 'best-sellers') matchTab = !!p.isBestSeller;
     else if (activeTab === 'gift-collection') matchTab = !!p.isGift;
     else matchTab = p.category === activeTab;
@@ -1377,24 +1227,6 @@ export default function App() {
         instagramPosts={instagramPosts}
         onAddInstagramPost={handleAddInstagramPost}
         onDeleteInstagramPost={handleDeleteInstagramPost}
-        storePaymentQr={storePaymentQr}
-        onUpdateStorePaymentQr={async (newQr) => {
-          setStorePaymentQr(newQr);
-          try {
-            await updateStorePaymentQr(newQr);
-          } catch (err) {
-            console.error('Error updating store payment QR in Firestore:', err);
-          }
-        }}
-        storeUpiSettings={storeUpiSettings}
-        onUpdateUpiSettings={async (newUpi) => {
-          setStoreUpiSettings(newUpi);
-          try {
-            await updateUpiPaymentSettings(newUpi);
-          } catch (err) {
-            console.error('Error updating store UPI settings in Firestore:', err);
-          }
-        }}
       />
     );
   }
@@ -1467,7 +1299,37 @@ export default function App() {
                   <ChevronDown className="w-3 h-3 stroke-[1.8]" />
                 </button>
                 {/* Dropdown elements */}
-                <div className="absolute left-0 mt-1 w-52 bg-[#FAF8F6] border border-espresso/15 shadow-xl rounded-xs py-2 hidden group-hover:block z-50">
+                <div className="absolute left-0 mt-1 w-56 bg-[#FAF8F6] border border-espresso/15 shadow-xl rounded-xs py-2 hidden group-hover:block z-50">
+                  <button 
+                    onClick={() => {
+                      setActiveTab('all');
+                      const el = document.getElementById('shop');
+                      el?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    className="block w-full text-left px-4 py-2 text-[10px] uppercase tracking-widest font-extrabold text-espresso hover:bg-linen/45 hover:text-terracotta transition-colors cursor-pointer border-b border-espresso/5"
+                  >
+                    All Jewellery
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setActiveTab('best-sellers');
+                      const el = document.getElementById('shop');
+                      el?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    className="block w-full text-left px-4 py-2 text-[10px] uppercase tracking-widest font-extrabold text-espresso hover:bg-linen/45 hover:text-terracotta transition-colors cursor-pointer"
+                  >
+                    Best Sellers
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setActiveTab('new-arrivals');
+                      const el = document.getElementById('shop');
+                      el?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    className="block w-full text-left px-4 py-2 text-[10px] uppercase tracking-widest font-extrabold text-espresso hover:bg-linen/45 hover:text-terracotta transition-colors cursor-pointer"
+                  >
+                    New Arrivals
+                  </button>
                   {(categories || []).filter(Boolean).map(cat => (
                     <button 
                       key={cat.tabId}
@@ -1476,9 +1338,9 @@ export default function App() {
                         const el = document.getElementById('shop');
                         el?.scrollIntoView({ behavior: 'smooth' });
                       }}
-                      className="block w-full text-left px-4 py-2.5 text-[10px] uppercase tracking-widest font-extrabold text-espresso hover:bg-linen/45 hover:text-terracotta transition-colors cursor-pointer"
+                      className="block w-full text-left px-4 py-2 text-[10px] uppercase tracking-widest font-extrabold text-espresso hover:bg-linen/45 hover:text-terracotta transition-colors cursor-pointer"
                     >
-                      {cat.title}
+                      {cat.subtitle ? `${cat.title} (${cat.subtitle})` : cat.title}
                     </button>
                   ))}
                 </div>
@@ -1559,7 +1421,12 @@ export default function App() {
                   referrerPolicy="no-referrer"
                   onError={(e) => {
                     const target = e.currentTarget;
-                    const fallbackImg = DEFAULT_HERO_SLIDES[idx % DEFAULT_HERO_SLIDES.length]?.imageUrl || 'https://images.unsplash.com/photo-1626784215021-2e39ac514150?q=85&w=1600&auto=format&fit=crop';
+                    const fallbacks = [
+                      'https://images.unsplash.com/photo-1626784215021-2e39ac514150?q=85&w=1600&auto=format&fit=crop',
+                      'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?q=85&w=1600&auto=format&fit=crop',
+                      'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?q=85&w=1600&auto=format&fit=crop'
+                    ];
+                    const fallbackImg = fallbacks[idx % fallbacks.length];
                     if (target.src !== fallbackImg) {
                       target.src = fallbackImg;
                     }
@@ -1732,8 +1599,8 @@ export default function App() {
             </div>
           </div>
 
-        {/* 7 Category Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-6 sm:gap-8">
+        {/* Dynamic Category Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-8 gap-4 sm:gap-6">
           {(categories || []).filter(Boolean).map((cat, idx) => (
             <div 
               key={idx}
@@ -1843,8 +1710,13 @@ export default function App() {
         {/* Dynamic Category Tabs Navigation */}
         <div className="flex overflow-x-auto no-scrollbar space-x-3 pb-4 mb-8 border-b border-espresso/10">
           {[
+            { id: 'all', label: 'All Jewellery' },
             { id: 'best-sellers', label: 'Best Sellers' },
-            ...(categories || []).filter(Boolean).map(cat => ({ id: cat.tabId, label: cat.title }))
+            { id: 'new-arrivals', label: 'New Arrivals' },
+            ...(categories || []).filter(Boolean).map(cat => ({ 
+              id: cat.tabId, 
+              label: cat.subtitle ? `${cat.title} (${cat.subtitle})` : cat.title 
+            }))
           ].map(tab => (
             <button
               key={tab.id}
@@ -2537,7 +2409,7 @@ export default function App() {
           <div className="space-y-4">
             <h4 className="font-serif text-lg font-bold tracking-[0.1em] text-[#FAF8F6] uppercase">Zerish Luxe</h4>
             <p className="text-xs text-linen/70 leading-relaxed max-w-xs">
-              Handpicking waterproof, sweatproof, tarnish-free surgical jewelry pieces. Everyday minimalist fine curations designed to stay gorgeous forever.
+              Handpicking waterproof, sweatproof, anti-tarnish jewelry pieces. Everyday minimalist curations designed to stay gorgeous forever.
             </p>
           </div>
 
@@ -2722,30 +2594,32 @@ export default function App() {
                         {checkoutSuccess ? (
                           /* Success Screen + Order Details Modal Trigger */
                           <div className="text-center py-6 space-y-5 bg-[#FAF8F6] p-5 border border-espresso/15 rounded-xs">
-                            <div className="w-12 h-12 bg-emerald-600 text-white rounded-full flex items-center justify-center mx-auto text-xl font-serif font-bold shadow-xs">
-                              ✓
+                            <div className="w-12 h-12 bg-[#25D366] text-white rounded-full flex items-center justify-center mx-auto shadow-xs">
+                              <MessageCircle className="w-6 h-6" />
                             </div>
                             <div>
-                              <h3 className="font-serif text-lg font-bold text-espresso">Order Placed Successfully!</h3>
+                              <h3 className="font-serif text-lg font-bold text-espresso">Order Enquiry Sent!</h3>
                               <p className="text-xs text-espresso/80 leading-relaxed max-w-xs mx-auto mt-1">
-                                Thank you for shopping with Zerish Luxe. Your order has been placed and received by our fulfillment center.
+                                Thank you for your enquiry. Your order details have been prepared and sent to WhatsApp. Our boutique concierges will assist you shortly.
                               </p>
                             </div>
                             
-                            <div className="bg-white p-3 border border-espresso/10 rounded-xs space-y-1">
-                              <p className="text-[9px] uppercase tracking-wider text-taupe">Tracking & Order Reference:</p>
-                              <p className="font-mono text-sm font-bold text-espresso uppercase tracking-widest">{checkoutSuccess}</p>
+                            <div className="bg-white p-3 border border-espresso/10 rounded-xs space-y-2">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-[9px] uppercase tracking-wider text-taupe font-bold">Enquire Number:</span>
+                                <span className="font-mono text-sm font-bold text-terracotta uppercase tracking-wider">{checkoutSuccess}</span>
+                              </div>
+                              {confirmedOrder && (
+                                <div className="flex items-center justify-between text-xs border-t border-espresso/5 pt-1.5">
+                                  <span className="text-[9px] uppercase tracking-wider text-taupe font-bold">Order ID:</span>
+                                  <span className="font-mono text-xs font-bold text-espresso bg-espresso/5 px-2 py-0.5 rounded-xs select-all">{confirmedOrder.id}</span>
+                                </div>
+                              )}
                             </div>
 
                             {/* Payment Status Pill */}
-                            <div className={`p-3 text-[10px] font-extrabold uppercase tracking-widest text-center border rounded-xs ${
-                              confirmedOrder?.isPaid 
-                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200/60' 
-                                : 'bg-amber-50 text-amber-800 border-amber-200/60'
-                            }`}>
-                              {confirmedOrder?.isPaid 
-                                ? '✓ Verified UPI Payment Confirmed' 
-                                : '⏳ Payment Verification Pending'}
+                            <div className="p-3 text-[10px] font-extrabold uppercase tracking-widest text-center border rounded-xs bg-emerald-50 text-emerald-800 border-emerald-200/60">
+                              Direct WhatsApp Enquiry Placed
                             </div>
 
                             <div className="space-y-2.5">
@@ -2769,7 +2643,7 @@ export default function App() {
                                 className="w-full py-3 bg-[#25D366] hover:bg-[#1EBE5D] text-white text-xs uppercase tracking-widest font-extrabold transition-all flex items-center justify-center gap-2 rounded-xs shadow-sm cursor-pointer"
                               >
                                 <MessageCircle className="w-4 h-4" />
-                                <span>Send / View WhatsApp Payment Slip</span>
+                                <span>Open WhatsApp Chat Again</span>
                               </a>
                             </div>
 
@@ -2781,9 +2655,7 @@ export default function App() {
                               onClick={() => {
                                 setIsCheckingOut(false);
                                 setCheckoutSuccess(null);
-                                setPaymentStep('shipping');
                                 setConfirmedOrder(null);
-                                setPendingOrder(null);
                                 setIsCartOpen(false);
                               }}
                               className="w-full py-2.5 border border-espresso/25 hover:bg-linen/25 text-espresso text-[10px] uppercase tracking-widest font-extrabold rounded-xs cursor-pointer"
@@ -2791,246 +2663,8 @@ export default function App() {
                               Continue Shopping
                             </button>
                           </div>
-                        ) : paymentStep === 'qr_payment' && pendingOrder ? (
-                          /* Interactive UPI QR Code Payment Step (The Last Step) */
-                          <div className="space-y-4">
-                            <button 
-                              onClick={() => setPaymentStep('shipping')}
-                              className="text-[10px] uppercase text-taupe font-extrabold tracking-wider hover:text-espresso flex items-center gap-1 cursor-pointer"
-                            >
-                              ← Back to Edit Customer Details
-                            </button>
-
-                            <div className="bg-[#FAF8F6] border border-espresso/15 p-4 rounded-xs text-center space-y-4">
-                              <div className="text-center space-y-1">
-                                <span className="inline-block px-2.5 py-0.5 bg-emerald-100 text-emerald-800 text-[9px] font-extrabold uppercase tracking-widest rounded-full">
-                                  Payment Step
-                                </span>
-                                <h4 className="font-serif text-base font-bold text-espresso">
-                                  Choose Payment Option
-                                </h4>
-                                <p className="text-[11px] text-espresso/70">
-                                  Select QR code or pay directly via your UPI app
-                                </p>
-                              </div>
-
-                              {/* Customer & Delivery Summary Card */}
-                              <div className="bg-white p-3 border border-espresso/10 rounded-xs text-left space-y-1 shadow-2xs">
-                                <div className="flex items-center justify-between text-[9px] uppercase tracking-wider text-taupe font-bold">
-                                  <span>Customer Delivery Details</span>
-                                  <button 
-                                    type="button" 
-                                    onClick={() => setPaymentStep('shipping')}
-                                    className="text-terracotta hover:underline cursor-pointer font-bold"
-                                  >
-                                    Edit Details
-                                  </button>
-                                </div>
-                                <p className="text-xs font-bold text-espresso">{pendingOrder.customerName} • {pendingOrder.phoneNumber}</p>
-                                <p className="text-[11px] text-espresso/80 leading-snug">
-                                  {pendingOrder.address ? `${pendingOrder.address}, ` : ''}{pendingOrder.city}, {pendingOrder.state} - {pendingOrder.postalCode}
-                                </p>
-                                {pendingOrder.email && (
-                                  <p className="text-[10px] text-espresso/60">{pendingOrder.email}</p>
-                                )}
-                              </div>
-
-                              {/* Embedded UPI QR Code with Direct App Pay */}
-                              <PaymentQRCode 
-                                amount={pendingOrder.total}
-                                orderId={pendingOrder.id}
-                                customerName={pendingOrder.customerName}
-                                customQrImageUrl={storePaymentQr}
-                                upiId={storeUpiSettings.upiId}
-                                merchantName={storeUpiSettings.merchantName}
-                                note={storeUpiSettings.defaultNote}
-                                onInitiateAppPayment={handleInitiateAppPayment}
-                              />
-
-                              {/* Awaiting Return Indicator Banner */}
-                              {isAwaitingUpiReturn && (
-                                <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-xs text-xs text-amber-950 flex items-start space-x-2.5 shadow-2xs animate-pulse">
-                                  <div className="w-2.5 h-2.5 rounded-full bg-amber-600 mt-1 shrink-0" />
-                                  <div>
-                                    <span className="font-bold block">Payment Initiated in {paymentAppUsed}!</span>
-                                    <span className="text-[11px] text-amber-900 leading-snug">
-                                      Please complete the payment in your UPI app. When you switch back to this tab, you will be prompted to enter your 12-digit UTR reference to immediately confirm your order.
-                                    </span>
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Payment Confirmation Section */}
-                              <div className="bg-white border border-espresso/15 rounded-xs p-4 text-left space-y-4 shadow-2xs">
-                                <div className="border-b border-espresso/10 pb-2.5">
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center space-x-1.5 text-espresso font-serif text-sm font-bold">
-                                      <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                                      <span>Confirm Payment</span>
-                                    </div>
-                                    <span className="text-[9px] uppercase tracking-wider font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                                      Zero UTR Required
-                                    </span>
-                                  </div>
-                                  <p className="text-[11px] text-espresso/70 mt-0.5">
-                                    Transferred <strong>₹{pendingOrder.total.toLocaleString('en-IN')}</strong>? Choose your confirmation method below:
-                                  </p>
-                                </div>
-
-                                {/* Step A: Select UPI App Used */}
-                                <div>
-                                  <label className="block text-[10px] uppercase tracking-wider font-extrabold text-espresso mb-1.5">
-                                    UPI App Used to Pay
-                                  </label>
-                                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
-                                    {['Google Pay', 'PhonePe', 'Paytm', 'BHIM', 'Cred', 'Other'].map((app) => (
-                                      <button
-                                        key={app}
-                                        type="button"
-                                        onClick={() => {
-                                          setPaymentAppUsed(app);
-                                          if (paymentValidationError) setPaymentValidationError(null);
-                                        }}
-                                        className={`py-1.5 px-1 text-[10px] font-bold rounded-xs border transition-all cursor-pointer text-center ${
-                                          paymentAppUsed === app 
-                                            ? 'bg-espresso text-white border-espresso shadow-xs' 
-                                            : 'bg-[#FAF8F6] text-espresso/80 border-espresso/15 hover:border-espresso/40'
-                                        }`}
-                                      >
-                                        {app}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-
-                                {/* PRIMARY 1-CLICK OPTION: WhatsApp Confirmation Slip */}
-                                <div className="p-3.5 bg-emerald-50/80 border border-emerald-300 rounded-xs space-y-2.5">
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center space-x-1.5">
-                                      <div className="w-6 h-6 rounded-full bg-[#25D366] text-white flex items-center justify-center shadow-xs">
-                                        <MessageCircle className="w-3.5 h-3.5" />
-                                      </div>
-                                      <span className="text-xs font-bold text-emerald-950">
-                                        WhatsApp Confirmation Slip
-                                      </span>
-                                    </div>
-                                    <span className="text-[8px] uppercase tracking-widest font-extrabold bg-emerald-200/90 text-emerald-900 px-2 py-0.5 rounded-full">
-                                      1-Click • Recommended
-                                    </span>
-                                  </div>
-
-                                  <p className="text-[11px] text-emerald-900/90 leading-snug">
-                                    Creates your order instantly and opens WhatsApp with a pre-filled payment confirmation slip. You can attach your payment screenshot in the chat.
-                                  </p>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => handleWhatsAppSlipConfirmation()}
-                                    className="w-full py-3.5 bg-[#25D366] hover:bg-[#1EBE5D] active:scale-[0.99] text-white text-xs uppercase tracking-widest font-extrabold shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer rounded-xs"
-                                  >
-                                    <MessageCircle className="w-4 h-4" />
-                                    <span>Send WhatsApp Confirmation Slip (1-Click) →</span>
-                                  </button>
-                                </div>
-
-                                {/* SECONDARY / MANUAL OPTION: Enter 12-Digit UTR */}
-                                <div className="border-t border-espresso/10 pt-2.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => setShowManualUtrInCheckout(!showManualUtrInCheckout)}
-                                    className="w-full text-left py-1 text-[11px] text-espresso/70 hover:text-espresso font-semibold flex items-center justify-between cursor-pointer"
-                                  >
-                                    <span>Or verify with 12-digit UPI UTR instead (Optional)</span>
-                                    {showManualUtrInCheckout ? (
-                                      <ChevronUp className="w-3.5 h-3.5 text-taupe" />
-                                    ) : (
-                                      <ChevronDown className="w-3.5 h-3.5 text-taupe" />
-                                    )}
-                                  </button>
-
-                                  {showManualUtrInCheckout && (
-                                    <div className="mt-3 space-y-3 pt-2 border-t border-espresso/5">
-                                      <div>
-                                        <div className="flex items-center justify-between mb-1">
-                                          <label className="block text-[10px] uppercase tracking-wider font-extrabold text-espresso">
-                                            UPI Transaction ID / UTR Number
-                                          </label>
-                                          <span className="text-[9px] text-taupe font-semibold">12-digit reference</span>
-                                        </div>
-                                        <input
-                                          type="text"
-                                          placeholder="e.g. 428910293847 or UPI Ref No."
-                                          value={paymentUtr}
-                                          onChange={(e) => {
-                                            setPaymentUtr(e.target.value);
-                                            if (paymentValidationError) setPaymentValidationError(null);
-                                          }}
-                                          className={`w-full border p-2.5 text-xs bg-[#FAF8F6] font-mono tracking-wider focus:outline-hidden focus:bg-white transition-colors rounded-xs ${
-                                            paymentValidationError && (!paymentUtr.trim() || paymentUtr.trim().length < 8)
-                                              ? 'border-red-500 bg-red-50/20'
-                                              : 'border-espresso/25 focus:border-espresso'
-                                          }`}
-                                        />
-                                        <p className="text-[10px] text-espresso/60 mt-1">
-                                          💡 In {paymentAppUsed || 'your UPI app'} payment receipt, look for <strong>UPI Transaction ID</strong> or <strong>UTR</strong>.
-                                        </p>
-                                      </div>
-
-                                      <div>
-                                        <label className="flex items-start space-x-2.5 cursor-pointer select-none">
-                                          <input
-                                            type="checkbox"
-                                            checked={isPaymentConfirmedChecked}
-                                            onChange={(e) => {
-                                              setIsPaymentConfirmedChecked(e.target.checked);
-                                              if (paymentValidationError) setPaymentValidationError(null);
-                                            }}
-                                            className="mt-0.5 h-4 w-4 rounded-xs border-espresso/30 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                                          />
-                                          <span className="text-[11px] text-espresso/85 leading-snug">
-                                            I confirm transfer of <strong>₹{pendingOrder.total.toLocaleString('en-IN')}</strong> and that the UTR entered above is accurate.
-                                          </span>
-                                        </label>
-                                      </div>
-
-                                      {paymentValidationError && (
-                                        <div className="p-2.5 bg-red-50 border border-red-300 rounded-xs flex items-start space-x-2 text-red-700 text-xs">
-                                          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
-                                          <div>
-                                            <strong className="font-bold block">Validation Required:</strong>
-                                            <span>{paymentValidationError}</span>
-                                          </div>
-                                        </div>
-                                      )}
-
-                                      <button
-                                        type="button"
-                                        onClick={handleValidateAndConfirmPayment}
-                                        className="w-full py-3 bg-espresso hover:bg-terracotta text-white text-xs uppercase tracking-widest font-extrabold shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer rounded-xs"
-                                      >
-                                        <Check className="w-4 h-4" />
-                                        <span>Verify via UTR (₹{pendingOrder.total.toLocaleString('en-IN')})</span>
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-
-                              <button
-                                onClick={() => {
-                                  setPaymentStep('shipping');
-                                  setPaymentUtr('');
-                                  setIsPaymentConfirmedChecked(false);
-                                  setPaymentValidationError(null);
-                                }}
-                                className="w-full py-2 text-[10px] text-espresso/70 hover:text-espresso underline cursor-pointer"
-                              >
-                                ← Edit Customer & Delivery Details
-                              </button>
-                            </div>
-                          </div>
                         ) : (
-                          /* Customer Details & Shipping Form (Step 1) */
+                          /* Customer Details & Shipping Form */
                           <div className="space-y-4">
                             <button 
                               onClick={() => setIsCheckingOut(false)}
@@ -3041,12 +2675,12 @@ export default function App() {
 
                             <form onSubmit={handleCheckoutSubmit} className="space-y-4">
                               <div className="border-b border-espresso/15 pb-2">
-                                <span className="text-[9px] uppercase tracking-wider font-extrabold text-terracotta">Step 1 of 2</span>
+                                <span className="text-[9px] uppercase tracking-wider font-extrabold text-terracotta">Enquiry & Delivery</span>
                                 <h3 className="font-serif text-base font-bold text-espresso">
                                   Customer & Delivery Details
                                 </h3>
                                 <p className="text-[11px] text-espresso/60">
-                                  Please enter your details to proceed to payment options.
+                                  Please enter your details to proceed with your WhatsApp enquiry.
                                 </p>
                               </div>
                               
@@ -3147,27 +2781,27 @@ export default function App() {
                                 </div>
                               </div>
 
-                              {/* Payment Method Notice */}
+                              {/* Order Channel Notice */}
                               <div className="pt-2 border-t border-espresso/10 space-y-2">
                                 <label className="block text-[9px] uppercase tracking-wider font-bold text-espresso">
-                                  Payment Method
+                                  Order Channel
                                 </label>
                                 
-                                <div className="flex items-start gap-3 p-3 border border-terracotta/30 bg-terracotta/5 rounded-xs">
-                                  <div className="w-8 h-8 rounded-full bg-espresso text-linen flex items-center justify-center flex-shrink-0 mt-0.5 shadow-xs">
-                                    <Smartphone className="w-4 h-4" />
+                                <div className="flex items-start gap-3 p-3 border border-emerald-500/30 bg-emerald-50/50 rounded-xs">
+                                  <div className="w-8 h-8 rounded-full bg-[#25D366] text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                                    <MessageCircle className="w-4 h-4" />
                                   </div>
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center justify-between">
                                       <span className="text-xs font-bold text-espresso flex items-center gap-1.5">
-                                        <span>UPI Payment</span>
+                                        <span>WhatsApp Direct Enquiry</span>
                                       </span>
                                       <span className="text-[8px] uppercase tracking-wider font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-full">
-                                        100% Secure
+                                        Fast Support
                                       </span>
                                     </div>
                                     <p className="text-[10px] text-taupe mt-0.5 leading-snug">
-                                      Choose between QR code or pay directly via your UPI app in the next step.
+                                      Your order enquiry will be sent directly to our boutique WhatsApp for confirmation.
                                     </p>
                                   </div>
                                 </div>
@@ -3175,10 +2809,10 @@ export default function App() {
 
                               <button 
                                 type="submit"
-                                className="w-full py-3.5 bg-espresso text-[#FAF8F6] hover:bg-terracotta text-xs uppercase tracking-widest font-extrabold shadow-md transition-all mt-3 cursor-pointer flex items-center justify-center gap-2 rounded-xs"
+                                className="w-full py-3.5 bg-[#25D366] hover:bg-[#1EBE5D] text-white text-xs uppercase tracking-widest font-extrabold shadow-md transition-all mt-3 cursor-pointer flex items-center justify-center gap-2 rounded-xs"
                               >
-                                <CreditCard className="w-4 h-4" />
-                                <span>Proceed to Payment (₹{grandTotal.toLocaleString('en-IN')}) →</span>
+                                <MessageCircle className="w-4 h-4" />
+                                <span>Send Order Enquiry via WhatsApp (₹{grandTotal.toLocaleString('en-IN')}) →</span>
                               </button>
                             </form>
                           </div>
@@ -3189,8 +2823,8 @@ export default function App() {
 
                   </div>
 
-                  {/* Drawer Footer Accounting - Only show when not checked out success and not in QR payment step */}
-                  {cart.length > 0 && !checkoutSuccess && paymentStep !== 'qr_payment' && (
+                  {/* Drawer Footer Accounting - Only show when not checked out success */}
+                  {cart.length > 0 && !checkoutSuccess && (
                     <div className="p-6 border-t border-espresso/15 space-y-4 bg-[#FAF8F6]">
                       
                       {/* Free Shipping Progress Indicator */}
@@ -3244,7 +2878,7 @@ export default function App() {
                           {!currentUser ? (
                             <div className="space-y-2.5 p-3.5 bg-linen/20 border border-espresso/10 rounded-xs w-full">
                               <p className="text-[10px] font-bold text-espresso uppercase tracking-wider text-center">
-                                Proceed to Checkout & Payment
+                                Proceed to WhatsApp Enquiry
                               </p>
                               <p className="text-[11px] text-espresso/70 text-center leading-normal">
                                 Create an account to track your orders, or proceed instantly as a guest.
@@ -3273,10 +2907,10 @@ export default function App() {
                               onClick={() => {
                                 setIsCheckingOut(true);
                               }}
-                              className="w-full py-4 bg-espresso text-[#FAF8F6] hover:bg-terracotta text-xs uppercase tracking-widest font-extrabold shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
+                              className="w-full py-4 bg-[#25D366] hover:bg-[#1EBE5D] text-white text-xs uppercase tracking-widest font-extrabold shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 rounded-xs"
                             >
-                              <CreditCard className="w-4 h-4" />
-                              <span>Proceed to Checkout & Payment</span>
+                              <MessageCircle className="w-4 h-4" />
+                              <span>Proceed to WhatsApp Enquiry</span>
                             </button>
                           )}
                         </div>
@@ -3355,100 +2989,11 @@ export default function App() {
         onClose={() => setIsTermsOpen(false)}
       />
 
-      {/* UPI App Return & Confirmation Dialog (Option 1) */}
-      <UpiReturnModal
-        isOpen={showUpiReturnModal}
-        onClose={() => setShowUpiReturnModal(false)}
-        orderId={pendingOrder?.id}
-        amount={pendingOrder?.total || 0}
-        selectedApp={paymentAppUsed}
-        onConfirmPayment={(utr, app, viaWhatsApp) => {
-          setPaymentAppUsed(app);
-          setShowUpiReturnModal(false);
-          if (pendingOrder) {
-            if (viaWhatsApp) {
-              handleWhatsAppSlipConfirmation(app);
-            } else {
-              setPaymentUtr(utr);
-              setIsPaymentConfirmedChecked(true);
-              const txnRef = `${app.toUpperCase().replace(/\s+/g, '')}-${utr.toUpperCase()}`;
-              finalizeOrder(pendingOrder, true, txnRef);
-            }
-          }
-        }}
-        onReopenApp={() => {
-          if (pendingOrder) {
-            const directUrl = buildUpiUrl({
-              upiId: storeUpiSettings.upiId,
-              merchantName: storeUpiSettings.merchantName,
-              amount: pendingOrder.total,
-              orderId: pendingOrder.id,
-              note: storeUpiSettings.defaultNote
-            });
-            window.location.href = directUrl;
-          }
-        }}
-      />
-
-      {/* 9. STANDALONE SCAN & PAY QR MODAL */}
-      <ScanAndPayModal 
-        isOpen={isScanAndPayOpen}
-        onClose={() => setIsScanAndPayOpen(false)}
-        initialAmount={cart.length > 0 ? grandTotal : undefined}
-        orderId={pendingOrder?.id}
-        customQrImageUrl={storePaymentQr}
-        onPaymentComplete={(ref) => {
-          if (pendingOrder) {
-            finalizeOrder(pendingOrder, true, ref);
-          } else if (cart.length > 0) {
-            // Instant payment of cart contents
-            const subtotal = cart.reduce((acc, curr) => acc + curr.product.price * curr.quantity, 0);
-            const isFree = subtotal >= 499 || subtotal === 0;
-            const ship = isFree ? 0 : 49;
-            let disc = 0;
-            if (appliedCoupon) {
-              disc = appliedCoupon.type === 'percent' 
-                ? Math.round(subtotal * (appliedCoupon.value / 100))
-                : appliedCoupon.value;
-            }
-            const finTotal = Math.max(0, subtotal - disc + ship);
-            const tracking = `ZL-TRACK-${Math.floor(1000 + Math.random() * 9000)}`;
-            const oid = `ZL-${Math.floor(1000 + Math.random() * 9000)}`;
-            const newOrd: Order = {
-              id: oid,
-              customerName: checkoutDetails.customerName.trim() || 'Valued Luxe Client',
-              phoneNumber: checkoutDetails.phoneNumber.trim() || 'Online Customer',
-              email: checkoutDetails.email?.trim(),
-              address: checkoutDetails.address?.trim(),
-              city: checkoutDetails.city.trim() || 'Online Order',
-              state: checkoutDetails.state.trim() || 'India',
-              postalCode: checkoutDetails.postalCode.trim() || '560001',
-              items: [...cart],
-              total: finTotal,
-              discount: disc,
-              couponApplied: appliedCoupon?.code,
-              status: 'Pending',
-              date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-              trackingNumber: tracking,
-              isPaid: true,
-              paymentMethod: 'UPI_QR',
-              upiTransactionRef: ref
-            };
-            finalizeOrder(newOrd, true, ref);
-          }
-        }}
-      />
-
-      {/* 10. DETAILED ORDER RECEIPT & INVOICE MODAL */}
+      {/* 9. DETAILED ORDER RECEIPT & INVOICE MODAL */}
       <OrderDetailsModal 
         isOpen={!!selectedOrderForDetails}
         order={selectedOrderForDetails}
         onClose={() => setSelectedOrderForDetails(null)}
-        onOpenScanAndPay={(order) => {
-          setSelectedOrderForDetails(null);
-          setPendingOrder(order);
-          setIsScanAndPayOpen(true);
-        }}
       />
 
       {/* MOBILE CATEGORIES BOTTOM SHEET */}
@@ -3478,63 +3023,137 @@ export default function App() {
               </div>
 
               {/* Sheet Header */}
-              <div className="px-6 pb-4 border-b border-espresso/10 flex items-center justify-between">
-                <h3 className="font-serif text-lg font-normal tracking-wide text-espresso uppercase">
-                  Select Category
-                </h3>
+              <div className="px-6 py-3.5 border-b border-espresso/10 flex items-center justify-between">
+                <div>
+                  <h3 className="font-serif text-base sm:text-lg font-medium tracking-wider text-espresso uppercase">
+                    All Categories & Curations
+                  </h3>
+                  <p className="text-[10px] text-taupe uppercase tracking-widest mt-0.5">
+                    Explore Anti Tarnish Jewellery
+                  </p>
+                </div>
                 <button 
                   onClick={() => setIsMobileCategoriesOpen(false)}
-                  className="p-1 rounded-full text-espresso hover:bg-espresso/10 transition-colors"
+                  className="p-1.5 rounded-full text-espresso hover:bg-espresso/10 transition-colors"
+                  aria-label="Close categories"
                 >
-                  <X className="w-4.5 h-4.5" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
 
-              {/* Category Grid List */}
-              <div className="p-6 grid grid-cols-2 gap-3.5">
-                {[
-                  { id: 'best-sellers', label: 'Best Sellers', count: 'Hot' },
-                  { id: 'chains', label: 'Chains', count: null },
-                  { id: 'necklaces', label: 'Necklaces', count: null },
-                  { id: 'rings', label: 'Rings', count: null },
-                  { id: 'bracelets', label: 'Bracelets', count: null },
-                  { id: 'cuff-bracelets', label: 'Cuff Bangles', count: null },
-                  { id: 'drop-earrings', label: 'Drop Earrings', count: null },
-                  { id: 'stud-earrings', label: 'Stud Earrings', count: null },
-                  { id: 'hair-accessories', label: 'Hair Accessories', count: null }
-                ].map(item => (
-                  <button 
-                    key={item.id}
-                    onClick={() => {
-                      setViewMode('customer');
-                      setActiveTab(item.id as any);
-                      setIsMobileCategoriesOpen(false);
-                      setTimeout(() => {
-                        const el = document.getElementById('shop');
-                        if (el) {
-                          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        }
-                      }, 100);
-                    }}
-                    className={`relative p-4 rounded-xs border text-left transition-all flex flex-col justify-between h-20 ${
-                      activeTab === item.id && viewMode === 'customer'
-                        ? 'border-terracotta bg-white shadow-sm'
-                        : 'border-espresso/10 bg-white hover:border-espresso'
-                    }`}
-                  >
-                    <span className="text-[10px] uppercase tracking-widest font-extrabold text-espresso">
-                      {item.label}
-                    </span>
-                    {item.count && (
-                      <span className="absolute top-2 right-2 bg-terracotta text-white text-[7px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-widest">
-                        {item.count}
+              {/* Quick Curations Row */}
+              <div className="px-6 pt-4 pb-2">
+                <p className="text-[9px] uppercase tracking-[0.2em] font-extrabold text-taupe mb-2.5">
+                  Featured Curations
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'all', label: 'All Jewellery', badge: 'All Pieces', active: activeTab === 'all' || activeTab === 'all-jewellery' },
+                    { id: 'best-sellers', label: 'Best Sellers', badge: 'Popular', active: activeTab === 'best-sellers' },
+                    { id: 'new-arrivals', label: 'New Arrivals', badge: 'New In', active: activeTab === 'new-arrivals' }
+                  ].map(cur => (
+                    <button
+                      key={cur.id}
+                      onClick={() => {
+                        setViewMode('customer');
+                        setActiveTab(cur.id as any);
+                        setIsMobileCategoriesOpen(false);
+                        setTimeout(() => {
+                          const el = document.getElementById('shop');
+                          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }, 100);
+                      }}
+                      className={`p-2.5 rounded-xs border text-center transition-all cursor-pointer flex flex-col items-center justify-center relative ${
+                        cur.active && viewMode === 'customer'
+                          ? 'bg-espresso text-white border-espresso shadow-xs'
+                          : 'bg-white border-espresso/15 text-espresso hover:border-terracotta'
+                      }`}
+                    >
+                      <span className="text-[10px] uppercase tracking-wider font-extrabold truncate w-full">
+                        {cur.label}
                       </span>
-                    )}
-                    <span className="text-[9px] text-espresso/40 font-semibold self-end">
-                      Explore ✦
-                    </span>
-                  </button>
-                ))}
+                      <span className={`text-[8px] font-semibold mt-0.5 ${
+                        cur.active && viewMode === 'customer' ? 'text-amber-300' : 'text-terracotta'
+                      }`}>
+                        {cur.badge}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Category Grid List */}
+              <div className="px-6 pt-3 pb-6">
+                <p className="text-[9px] uppercase tracking-[0.2em] font-extrabold text-taupe mb-2.5">
+                  Shop By Category
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  {(() => {
+                    // Combine all defined categories from settings + any product categories not yet in settings
+                    const combinedList = [...(categories || []).filter(Boolean)];
+                    (products || []).forEach(p => {
+                      if (p && p.category && !combinedList.some(c => c.tabId === p.category)) {
+                        combinedList.push({
+                          title: p.category.replace(/-/g, ' ').toUpperCase(),
+                          subtitle: null,
+                          tabId: p.category,
+                          imageUrl: p.imageUrl
+                        });
+                      }
+                    });
+
+                    return combinedList.map(cat => {
+                      const isActive = activeTab === cat.tabId && viewMode === 'customer';
+
+                      return (
+                        <button 
+                          key={cat.tabId}
+                          onClick={() => {
+                            setViewMode('customer');
+                            setActiveTab(cat.tabId as any);
+                            setIsMobileCategoriesOpen(false);
+                            setTimeout(() => {
+                              const el = document.getElementById('shop');
+                              if (el) {
+                                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                              }
+                            }, 100);
+                          }}
+                          className={`relative p-3 rounded-xs border text-left transition-all flex items-center space-x-3 cursor-pointer group ${
+                            isActive
+                              ? 'border-terracotta bg-linen/30 shadow-xs'
+                              : 'border-espresso/15 bg-white hover:border-espresso/40'
+                          }`}
+                        >
+                          {/* Image thumbnail */}
+                          <div className="w-12 h-12 rounded-xs overflow-hidden bg-espresso/5 shrink-0 border border-espresso/10">
+                            <img 
+                              src={cat.imageUrl || 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?q=80&w=500&auto=format&fit=crop'} 
+                              alt={cat.title} 
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              referrerPolicy="no-referrer"
+                            />
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[10px] uppercase tracking-widest font-extrabold text-espresso block truncate">
+                              {cat.title}
+                            </span>
+                            {cat.subtitle && (
+                              <span className="text-[8px] uppercase tracking-wider text-taupe block truncate">
+                                {cat.subtitle}
+                              </span>
+                            )}
+                          </div>
+
+                          {isActive && (
+                            <span className="w-2 h-2 rounded-full bg-terracotta shrink-0" />
+                          )}
+                        </button>
+                      );
+                    });
+                  })()}
+                </div>
               </div>
             </motion.div>
           </div>
@@ -3563,17 +3182,22 @@ export default function App() {
 
         {/* Categories Button */}
         <button 
+          id="mobile-nav-categories-btn"
           onClick={() => {
-            setIsMobileCategoriesOpen(true);
+            setIsMobileCategoriesOpen(prev => !prev);
           }}
-          className={`flex flex-col items-center space-y-1 py-1 px-3 rounded-md transition-colors cursor-pointer ${
+          className={`flex flex-col items-center justify-center space-y-1 py-1 px-3.5 rounded-lg transition-all duration-200 cursor-pointer relative ${
             isMobileCategoriesOpen
-              ? 'text-terracotta'
-              : 'text-espresso/60 hover:text-espresso'
+              ? 'text-terracotta bg-terracotta/10 shadow-xs'
+              : 'text-espresso/70 hover:text-espresso hover:bg-espresso/5 active:scale-95'
           }`}
+          aria-label="Toggle Categories Menu"
         >
           <LayoutGrid className="w-5 h-5 stroke-[1.8]" />
           <span className="text-[9px] uppercase tracking-wider font-extrabold">Categories</span>
+          {activeTab !== 'best-sellers' && activeTab !== 'all' && (
+            <span className="absolute top-1 right-2.5 w-1.5 h-1.5 bg-terracotta rounded-full ring-2 ring-white" />
+          )}
         </button>
 
         {/* Wishlist Button */}
