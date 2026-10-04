@@ -490,5 +490,3 @@ export async function addInstagramPost(post: InstagramPost): Promise<void> {
 export async function deleteInstagramPost(id: string): Promise<void> {
   await deleteDoc(doc(db, 'instagram_posts', id));
 }
-
-
