@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, CheckCircle2, Truck, Package, Printer, Share2, MapPin, Calendar, CreditCard, ShieldCheck, QrCode, Phone, ExternalLink } from 'lucide-react';
+import { X, CheckCircle2, Truck, Package, Printer, Share2, MapPin, Calendar, CreditCard, ShieldCheck, Phone, ExternalLink } from 'lucide-react';
 import { Order } from '../types';
 
 interface OrderDetailsModalProps {
@@ -7,15 +7,13 @@ interface OrderDetailsModalProps {
   onClose: () => void;
   order: Order | null;
   onTrackOrder?: (trackingCode: string) => void;
-  onOpenScanAndPay?: (order: Order) => void;
 }
 
 export default function OrderDetailsModal({ 
   isOpen, 
   onClose, 
   order, 
-  onTrackOrder,
-  onOpenScanAndPay 
+  onTrackOrder
 }: OrderDetailsModalProps) {
   if (!isOpen || !order) return null;
 
@@ -24,26 +22,22 @@ export default function OrderDetailsModal({
   };
 
   const handleShareWhatsApp = () => {
-    let msg = `✨ *ZERISH LUXE ANTI_TARNISH JEWELLERY - ORDER RECEIPT* ✨\n\n`;
+    let msg = `✨ *ZERISH LUXE ANTI TARNISH JEWELLERY - ENQUIRY SUMMARY* ✨\n\n`;
     msg += `📄 *Order ID:* ${order.id}\n`;
-    msg += `🚚 *Tracking Reference:* ${order.trackingNumber}\n`;
+    msg += `🚚 *Enquire Number:* ${order.trackingNumber}\n`;
     msg += `📅 *Date:* ${order.date}\n`;
     msg += `👤 *Customer:* ${order.customerName} (${order.phoneNumber})\n`;
     msg += `📍 *Delivery Address:* ${order.address ? `${order.address}, ` : ''}${order.city}, ${order.state} - ${order.postalCode}\n\n`;
-    msg += `🛍️ *ORDERED ITEMS:*\n`;
+    msg += `🛍️ *ENQUIRED ITEMS:*\n`;
     order.items.forEach((item, idx) => {
       msg += `${idx + 1}. *${item.product.name}* (Qty: ${item.quantity}) - ₹${(item.product.price * item.quantity).toLocaleString('en-IN')}\n`;
     });
-    msg += `\n💰 *Total Amount:* ₹${order.total.toLocaleString('en-IN')}\n`;
+    msg += `\n💰 *Total Estimated Value:* ₹${order.total.toLocaleString('en-IN')}\n`;
     if (order.discount > 0) {
       msg += `🏷️ *Discount Applied:* ₹${order.discount.toLocaleString('en-IN')} (Code: ${order.couponApplied || 'OFFER'})\n`;
     }
-    msg += `💳 *Payment Method:* ${order.paymentMethod === 'UPI_QR' ? 'UPI QR Code Scan & Pay' : 'UPI Payment'}\n`;
-    msg += `✅ *Payment Status:* ${order.isPaid ? 'Verified Paid ✓' : 'Payment Verification Pending'}\n`;
-    if (order.upiTransactionRef) {
-      msg += `🔢 *UPI Ref / UTR:* ${order.upiTransactionRef}\n`;
-    }
-    msg += `\nThank you for choosing Zerish Luxe! Crafted for everyday elegance.`;
+    msg += `📱 *Channel:* WhatsApp Direct Enquiry\n`;
+    msg += `\nHello Zerish Luxe Team, I would like to enquire about this jewellery curation. Please assist me with availability & confirmation.`;
 
     const encoded = encodeURIComponent(msg);
     window.open(`https://wa.me/919916026262?text=${encoded}`, '_blank');
@@ -79,7 +73,7 @@ export default function OrderDetailsModal({
             <div className="flex items-center space-x-2">
               <span className="font-serif text-2xl font-bold tracking-tight text-espresso">ZERISH LUXE</span>
               <span className="text-[10px] tracking-widest text-terracotta uppercase font-bold px-2 py-0.5 bg-terracotta/10 rounded-full">
-                Fine Jewellery
+                Anti Tarnish Jewellery
               </span>
             </div>
             <p className="text-[10px] uppercase tracking-widest text-taupe font-medium mt-0.5">
@@ -95,7 +89,7 @@ export default function OrderDetailsModal({
               </span>
             </div>
             <div className="flex items-center sm:justify-end space-x-1.5">
-              <span className="text-[9px] uppercase tracking-wider text-taupe font-bold">Tracking Code:</span>
+              <span className="text-[9px] uppercase tracking-wider text-taupe font-bold">Enquire Number:</span>
               <span className="font-mono text-xs font-bold text-terracotta select-all">
                 {order.trackingNumber}
               </span>
@@ -182,23 +176,18 @@ export default function OrderDetailsModal({
             </p>
           </div>
 
-          {/* Payment Method & Status */}
+          {/* Enquiry Channel & Status */}
           <div className="p-3.5 bg-white border border-espresso/10 rounded-xs space-y-1.5 flex flex-col justify-between">
             <div>
               <div className="flex items-center space-x-1.5 text-[10px] uppercase tracking-wider font-extrabold text-taupe">
                 <CreditCard className="w-3.5 h-3.5 text-terracotta" />
-                <span>Payment Information</span>
+                <span>Channel Information</span>
               </div>
               <div className="mt-1 flex items-center space-x-2">
                 <span className="text-xs font-bold text-espresso">
-                  UPI Payment
+                  WhatsApp Direct Enquiry
                 </span>
               </div>
-              {order.upiTransactionRef && (
-                <p className="text-[10px] text-taupe font-mono mt-0.5">
-                  UTR / Ref: <span className="font-bold text-espresso">{order.upiTransactionRef}</span>
-                </p>
-              )}
             </div>
 
             <div className={`p-2 rounded-xs text-[10px] font-bold uppercase tracking-wider text-center ${
@@ -206,7 +195,7 @@ export default function OrderDetailsModal({
                 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' 
                 : 'bg-amber-50 text-amber-800 border border-amber-200'
             }`}>
-              {order.isPaid ? 'Payment Confirmed & Verified ✓' : 'Payment Verification Pending'}
+              {order.isPaid ? 'Enquiry Replied & Confirmed ✓' : 'Enquiry Sent via WhatsApp'}
             </div>
           </div>
         </div>
@@ -307,16 +296,6 @@ export default function OrderDetailsModal({
           </div>
 
           <div className="flex items-center space-x-2">
-            {!order.isPaid && onOpenScanAndPay && (
-              <button
-                onClick={() => onOpenScanAndPay(order)}
-                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xs text-[9px] uppercase tracking-widest font-extrabold flex items-center space-x-1.5 transition-colors cursor-pointer shadow-xs"
-              >
-                <QrCode className="w-3.5 h-3.5" />
-                <span>Pay via UPI QR</span>
-              </button>
-            )}
-
             {onTrackOrder && (
               <button
                 onClick={() => {
