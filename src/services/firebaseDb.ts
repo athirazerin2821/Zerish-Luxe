@@ -382,12 +382,17 @@ export async function getHeroCarouselSettings(): Promise<HeroCarouselSettings> {
           } else if (img.startsWith('/src/assets/')) {
             img = img.replace('/src/assets/', '/assets/');
           }
+          // Ensure model images are strictly kept (no flowers or inanimate still-life shots)
+          if (img.includes('satin_flowers') || img.includes('with_flowers') || img.includes('macro_gold') || img.includes('unsplash.com')) {
+            img = DEFAULT_HERO_SLIDES[idx % DEFAULT_HERO_SLIDES.length]?.imageUrl;
+          }
           return { ...slide, imageUrl: img };
         });
 
         return {
           slides: sanitizedSlides,
-          autoPlayIntervalSeconds: data.autoPlayIntervalSeconds || 6,
+          autoPlay: data.autoPlay === true,
+          autoPlayIntervalSeconds: data.autoPlay === true ? (data.autoPlayIntervalSeconds || 6) : 0,
           activeFestiveTheme: data.activeFestiveTheme || 'classic'
         };
       }
@@ -397,7 +402,8 @@ export async function getHeroCarouselSettings(): Promise<HeroCarouselSettings> {
   }
   return {
     slides: DEFAULT_HERO_SLIDES,
-    autoPlayIntervalSeconds: 6,
+    autoPlay: false,
+    autoPlayIntervalSeconds: 0,
     activeFestiveTheme: 'classic'
   };
 }
@@ -490,3 +496,5 @@ export async function addInstagramPost(post: InstagramPost): Promise<void> {
 export async function deleteInstagramPost(id: string): Promise<void> {
   await deleteDoc(doc(db, 'instagram_posts', id));
 }
+
+
