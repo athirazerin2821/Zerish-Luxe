@@ -10,10 +10,81 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
-import { Product, Order, Coupon, Testimonial, UserAccount, CategorySetting, InstagramPost, HeroSlide, HeroCarouselSettings, UpiPaymentSettings } from '../types';
+import { Product, Order, Coupon, Testimonial, UserAccount, CategorySetting, InstagramPost, HeroSlide, HeroCarouselSettings } from '../types';
 import { INITIAL_PRODUCTS, TESTIMONIALS, DEFAULT_HERO_SLIDES } from '../data';
 import { optimizeDataUrl, optimizeProductForFirestore } from './imageOptimizer';
-import { DEFAULT_UPI_SETTINGS, getCachedUpiSettings, setCachedUpiSettings } from '../utils/upi';
+
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  };
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+/**
+ * Recursively removes all `undefined` values from an object or array so that Firestore does not throw
+ * "Unsupported field value: undefined".
+ */
+export function sanitizeForFirestore<T>(data: T): T {
+  if (data === null || data === undefined) {
+    return null as unknown as T;
+  }
+  if (Array.isArray(data)) {
+    return data
+      .filter((item) => item !== undefined)
+      .map((item) => sanitizeForFirestore(item)) as unknown as T;
+  }
+  if (typeof data === 'object' && !(data instanceof Date)) {
+    const cleaned: Record<string, any> = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== undefined) {
+        cleaned[key] = sanitizeForFirestore(value);
+      }
+    }
+    return cleaned as T;
+  }
+  return data;
+}
 
 export const DEFAULT_INSTAGRAM_POSTS: InstagramPost[] = [];
 
@@ -23,6 +94,12 @@ export const DEFAULT_CATEGORIES: CategorySetting[] = [
     subtitle: null,
     tabId: 'chains',
     imageUrl: 'https://images.unsplash.com/photo-1611085583191-a3b1a30d5a41?q=80&w=500&auto=format&fit=crop'
+  },
+  {
+    title: 'NECKLACES',
+    subtitle: 'PENDANTS',
+    tabId: 'necklaces',
+    imageUrl: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?q=80&w=500&auto=format&fit=crop'
   },
   {
     title: 'EARRINGS',
@@ -188,12 +265,14 @@ export async function getProducts(): Promise<Product[]> {
 }
 
 export async function addProduct(product: Product): Promise<void> {
-  const sanitized = await optimizeProductForFirestore(product);
+  const optimized = await optimizeProductForFirestore(product);
+  const sanitized = sanitizeForFirestore(optimized);
   await setDoc(doc(db, 'products', sanitized.id), sanitized);
 }
 
 export async function updateProduct(product: Product): Promise<void> {
-  const sanitized = await optimizeProductForFirestore(product);
+  const optimized = await optimizeProductForFirestore(product);
+  const sanitized = sanitizeForFirestore(optimized);
   await setDoc(doc(db, 'products', sanitized.id), sanitized);
 }
 
@@ -213,7 +292,13 @@ export async function getOrders(): Promise<Order[]> {
 }
 
 export async function createOrder(order: Order): Promise<void> {
-  await setDoc(doc(db, 'orders', order.id), order);
+  const path = `orders/${order.id}`;
+  try {
+    const sanitized = sanitizeForFirestore(order);
+    await setDoc(doc(db, 'orders', order.id), sanitized);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
 }
 
 export async function updateOrderStatus(orderId: string, status: 'Pending' | 'Dispatched' | 'Delivered'): Promise<void> {
@@ -283,89 +368,6 @@ export async function updateHeroText(title: string, subtitle: string): Promise<v
   await setDoc(doc(db, 'settings', 'hero'), { title, subtitle });
 }
 
-// Settings / Store Payment QR Code API
-export async function getStorePaymentQr(): Promise<string> {
-  try {
-    const docSnap = await getDoc(doc(db, 'settings', 'payment_qr'));
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-      if (data && typeof data.qrImageUrl === 'string' && data.qrImageUrl.trim()) {
-        return data.qrImageUrl;
-      }
-    }
-  } catch (err) {
-    console.warn('Could not fetch payment_qr from Firestore, falling back to cache:', err);
-  }
-  try {
-    return localStorage.getItem('zerish_custom_qr_code') || '';
-  } catch {
-    return '';
-  }
-}
-
-export async function updateStorePaymentQr(qrImageUrl: string): Promise<void> {
-  let optimized = qrImageUrl;
-  if (optimized && optimized.startsWith('data:image/')) {
-    try {
-      optimized = await optimizeDataUrl(optimized, 600, 0.85);
-    } catch (e) {
-      console.warn('Failed to optimize QR image, using raw string', e);
-    }
-  }
-  await setDoc(doc(db, 'settings', 'payment_qr'), {
-    qrImageUrl: optimized,
-    updatedAt: new Date().toISOString()
-  });
-  try {
-    if (optimized) {
-      localStorage.setItem('zerish_custom_qr_code', optimized);
-    } else {
-      localStorage.removeItem('zerish_custom_qr_code');
-    }
-  } catch {
-    // Ignore storage quota error
-  }
-}
-
-// Settings / Store UPI App Pay & VPA Configuration API
-export async function getUpiPaymentSettings(): Promise<UpiPaymentSettings> {
-  try {
-    const docSnap = await getDoc(doc(db, 'settings', 'upi_payment'));
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-      if (data && typeof data.upiId === 'string' && data.upiId.trim()) {
-        const settings: UpiPaymentSettings = {
-          upiId: data.upiId.trim(),
-          merchantName: data.merchantName?.trim() || DEFAULT_UPI_SETTINGS.merchantName,
-          defaultNote: data.defaultNote?.trim() || DEFAULT_UPI_SETTINGS.defaultNote,
-          isDirectAppPayEnabled: data.isDirectAppPayEnabled !== false
-        };
-        setCachedUpiSettings(settings);
-        return settings;
-      }
-    }
-  } catch (err) {
-    console.warn('Could not fetch upi_payment from Firestore, falling back to local cache:', err);
-  }
-  return getCachedUpiSettings();
-}
-
-export async function updateUpiPaymentSettings(settings: UpiPaymentSettings): Promise<void> {
-  const sanitized: UpiPaymentSettings = {
-    upiId: settings.upiId.trim(),
-    merchantName: settings.merchantName?.trim() || DEFAULT_UPI_SETTINGS.merchantName,
-    defaultNote: settings.defaultNote?.trim() || DEFAULT_UPI_SETTINGS.defaultNote,
-    isDirectAppPayEnabled: settings.isDirectAppPayEnabled !== false
-  };
-
-  await setDoc(doc(db, 'settings', 'upi_payment'), {
-    ...sanitized,
-    updatedAt: new Date().toISOString()
-  });
-
-  setCachedUpiSettings(sanitized);
-}
-
 // Settings / Hero Festive Carousel API
 export async function getHeroCarouselSettings(): Promise<HeroCarouselSettings> {
   try {
@@ -375,8 +377,10 @@ export async function getHeroCarouselSettings(): Promise<HeroCarouselSettings> {
       if (data && Array.isArray(data.slides) && data.slides.length > 0) {
         const sanitizedSlides = (data.slides as HeroSlide[]).map((slide, idx) => {
           let img = slide.imageUrl;
-          if (!img || img.startsWith('/src/assets/images/')) {
-            img = DEFAULT_HERO_SLIDES[idx % DEFAULT_HERO_SLIDES.length]?.imageUrl || img;
+          if (!img) {
+            img = DEFAULT_HERO_SLIDES[idx % DEFAULT_HERO_SLIDES.length]?.imageUrl || '';
+          } else if (img.startsWith('/src/assets/')) {
+            img = img.replace('/src/assets/', '/assets/');
           }
           return { ...slide, imageUrl: img };
         });
@@ -447,11 +451,17 @@ export async function uploadProductImage(file: File): Promise<string> {
 
 // Customers API (saves user/guest details on sign up or guest checkout)
 export async function saveCustomer(user: UserAccount): Promise<void> {
-  const cleanPhone = user.phoneNumber.trim();
-  await setDoc(doc(db, 'customers', cleanPhone), {
-    ...user,
-    updatedAt: new Date().toISOString()
-  });
+  const cleanPhone = user.phoneNumber?.trim() || 'unknown';
+  const path = `customers/${cleanPhone}`;
+  try {
+    const sanitized = sanitizeForFirestore({
+      ...user,
+      updatedAt: new Date().toISOString()
+    });
+    await setDoc(doc(db, 'customers', cleanPhone), sanitized);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
 }
 
 export async function getCustomers(): Promise<UserAccount[]> {
