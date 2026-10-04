@@ -27,19 +27,13 @@ import {
   Layers,
   Wand2,
   PlusCircle,
-  QrCode,
   Upload,
-  Image as ImageIcon,
-  Smartphone,
-  Copy,
-  ExternalLink,
-  AlertCircle
+  Image as ImageIcon
 } from 'lucide-react';
-import { Product, Order, Coupon, SalesAnalytics, Testimonial, UserAccount, CategorySetting, InstagramPost, HeroSlide, HeroCarouselSettings, UpiPaymentSettings } from '../types';
+import { Product, Order, Coupon, SalesAnalytics, Testimonial, UserAccount, CategorySetting, InstagramPost, HeroSlide, HeroCarouselSettings } from '../types';
 import { PRESET_IMAGE_TEMPLATES, DEFAULT_HERO_SLIDES, FESTIVE_HERO_PRESETS, FestivePreset } from '../data';
 import { compressImageFile } from '../services/imageOptimizer';
-import { updateStorePaymentQr, getStorePaymentQr, getUpiPaymentSettings, updateUpiPaymentSettings, uploadProductImage } from '../services/firebaseDb';
-import { isValidUpiId, buildUpiUrl, DEFAULT_UPI_SETTINGS, getCachedUpiSettings } from '../utils/upi';
+import { uploadProductImage } from '../services/firebaseDb';
 
 interface SellerPortalProps {
   isOpen: boolean;
@@ -68,10 +62,6 @@ interface SellerPortalProps {
   instagramPosts?: InstagramPost[];
   onAddInstagramPost?: (post: InstagramPost) => Promise<void> | void;
   onDeleteInstagramPost?: (id: string) => Promise<void> | void;
-  storePaymentQr?: string;
-  onUpdateStorePaymentQr?: (qr: string) => Promise<void> | void;
-  storeUpiSettings?: UpiPaymentSettings;
-  onUpdateUpiSettings?: (settings: UpiPaymentSettings) => Promise<void> | void;
 }
 
 export default function SellerPortal({
@@ -100,11 +90,7 @@ export default function SellerPortal({
   onUpdateCategories,
   instagramPosts = [],
   onAddInstagramPost,
-  onDeleteInstagramPost,
-  storePaymentQr,
-  onUpdateStorePaymentQr,
-  storeUpiSettings,
-  onUpdateUpiSettings
+  onDeleteInstagramPost
 }: SellerPortalProps) {
   // Auth states
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -366,137 +352,6 @@ export default function SellerPortal({
   const [bannerTitle, setBannerTitle] = useState(heroText.title);
   const [bannerSub, setBannerSub] = useState(heroText.subtitle);
   const [bannerUpdated, setBannerUpdated] = useState(false);
-
-  // Store Payment QR Code state
-  const [customStoreQr, setCustomStoreQr] = useState<string>(() => storePaymentQr || '');
-  const [qrUploadLoading, setQrUploadLoading] = useState(false);
-  const [qrSavedNotice, setQrSavedNotice] = useState(false);
-
-  // Store Direct UPI URL & Gateway Configuration state (Option 1)
-  const [localUpiSettings, setLocalUpiSettings] = useState<UpiPaymentSettings>(() => {
-    return storeUpiSettings || getCachedUpiSettings();
-  });
-  const [upiSavedNotice, setUpiSavedNotice] = useState(false);
-  const [upiSaving, setUpiSaving] = useState(false);
-  const [upiValidationError, setUpiValidationError] = useState<string | null>(null);
-  const [copiedUpiUrl, setCopiedUpiUrl] = useState(false);
-
-  useEffect(() => {
-    if (storeUpiSettings) {
-      setLocalUpiSettings(storeUpiSettings);
-    } else {
-      getUpiPaymentSettings().then(settings => {
-        if (settings) setLocalUpiSettings(settings);
-      }).catch(err => console.warn('Could not fetch store UPI settings:', err));
-    }
-  }, [isOpen, storeUpiSettings]);
-
-  const handleSaveUpiSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setUpiValidationError(null);
-
-    const cleanedId = localUpiSettings.upiId.trim();
-    if (!cleanedId) {
-      setUpiValidationError('Please enter a valid UPI ID (VPA), e.g. 9916026262@upi or yourname@okhdfcbank');
-      return;
-    }
-
-    if (!isValidUpiId(cleanedId)) {
-      setUpiValidationError('Invalid UPI ID format. It should look like username@bank or mobilenumber@upi (contains an @ symbol).');
-      return;
-    }
-
-    setUpiSaving(true);
-    try {
-      const updated: UpiPaymentSettings = {
-        ...localUpiSettings,
-        upiId: cleanedId,
-        merchantName: localUpiSettings.merchantName.trim() || DEFAULT_UPI_SETTINGS.merchantName,
-        defaultNote: localUpiSettings.defaultNote?.trim() || DEFAULT_UPI_SETTINGS.defaultNote,
-        isDirectAppPayEnabled: localUpiSettings.isDirectAppPayEnabled !== false
-      };
-      await updateUpiPaymentSettings(updated);
-      if (onUpdateUpiSettings) {
-        await onUpdateUpiSettings(updated);
-      }
-      setUpiSavedNotice(true);
-      setTimeout(() => setUpiSavedNotice(false), 4000);
-    } catch (err) {
-      console.warn('Error saving store UPI settings:', err);
-      setUpiValidationError('Failed to save UPI settings to database.');
-    } finally {
-      setUpiSaving(false);
-    }
-  };
-
-  const sampleUpiUrl = buildUpiUrl({
-    upiId: localUpiSettings.upiId,
-    merchantName: localUpiSettings.merchantName,
-    amount: 1500,
-    orderId: 'DEMO-101',
-    note: localUpiSettings.defaultNote
-  });
-
-  const handleCopySampleUpiUrl = () => {
-    navigator.clipboard.writeText(sampleUpiUrl).then(() => {
-      setCopiedUpiUrl(true);
-      setTimeout(() => setCopiedUpiUrl(false), 3000);
-    }).catch(() => {});
-  };
-
-  useEffect(() => {
-    if (storePaymentQr) {
-      setCustomStoreQr(storePaymentQr);
-    } else {
-      getStorePaymentQr().then(qr => {
-        if (qr) setCustomStoreQr(qr);
-      }).catch(err => console.warn('Could not fetch store QR:', err));
-    }
-  }, [isOpen, storePaymentQr]);
-
-  const handleCustomStoreQrUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file (PNG, JPG, WEBP, or SVG).');
-      return;
-    }
-    setQrUploadLoading(true);
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const base64 = reader.result as string;
-      try {
-        setCustomStoreQr(base64);
-        await updateStorePaymentQr(base64);
-        if (onUpdateStorePaymentQr) {
-          await onUpdateStorePaymentQr(base64);
-        }
-        window.dispatchEvent(new Event('custom_qr_code_updated'));
-        setQrSavedNotice(true);
-        setTimeout(() => setQrSavedNotice(false), 4000);
-      } catch (err) {
-        console.warn('Error saving store QR code:', err);
-      } finally {
-        setQrUploadLoading(false);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleRemoveStoreQr = async () => {
-    if (confirm('Are you sure you want to remove your custom QR code?')) {
-      setCustomStoreQr('');
-      try {
-        await updateStorePaymentQr('');
-        if (onUpdateStorePaymentQr) {
-          await onUpdateStorePaymentQr('');
-        }
-        window.dispatchEvent(new Event('custom_qr_code_updated'));
-      } catch (err) {
-        console.warn('Error removing store QR code:', err);
-      }
-    }
-  };
 
   // Festive & Hero Carousel settings state
   const [localHeroSettings, setLocalHeroSettings] = useState<HeroCarouselSettings>(() => {
@@ -824,7 +679,7 @@ export default function SellerPortal({
         category: newProdCategory,
         price: Number(newProdPrice),
         originalPrice: newProdOriginalPrice ? Number(newProdOriginalPrice) : undefined,
-        description: newProdDesc || `${newProdName} - handpicked luxury fine jewelry. Waterproof, sweatproof, and anti-tarnish designed for everyday elegance.`,
+        description: newProdDesc || `${newProdName} - handpicked luxury anti-tarnish jewelry. Waterproof, sweatproof, and anti-tarnish designed for everyday elegance.`,
         imageUrl: primaryUrl,
         thumbnails: allThumbnails,
         stock: Number(newProdStock),
@@ -1867,7 +1722,7 @@ export default function SellerPortal({
                                 title="Select All / Deselect All"
                               />
                             )}
-                            <h4 className="font-serif text-sm font-bold text-espresso">Active Fine Catalog ({products.length})</h4>
+                            <h4 className="font-serif text-sm font-bold text-espresso">Active Anti Tarnish Catalog ({products.length})</h4>
                           </div>
                           
                           <div className="flex items-center space-x-3">
@@ -2325,13 +2180,13 @@ export default function SellerPortal({
                                     className="rounded-xs border-espresso/30 text-terracotta focus:ring-terracotta cursor-pointer"
                                   />
                                   <div>
-                                    <p className="font-bold text-espresso">Enquiry ID: {o.id}</p>
+                                    <p className="font-bold text-espresso">Order ID: <span className="font-mono">{o.id}</span></p>
                                     <p className="text-taupe">{o.date}</p>
                                   </div>
                                 </div>
                                 <div className="flex items-center justify-between sm:justify-end space-x-3 text-right">
                                   <div>
-                                    <p className="font-bold text-espresso">Enquiry Code: <span className="font-mono text-terracotta uppercase">{o.trackingNumber}</span></p>
+                                    <p className="font-bold text-espresso">Enquire No: <span className="font-mono text-terracotta uppercase">{o.trackingNumber}</span></p>
                                     <p className="text-taupe">Inquirer: <strong className="text-espresso">{o.customerName}</strong> ({o.phoneNumber})</p>
                                   </div>
                                   <button
@@ -2608,269 +2463,6 @@ export default function SellerPortal({
                   {/* ========================================== */}
                   {adminTab === 'settings' && (
                     <div className="space-y-8 max-w-4xl">
-                      {/* Direct UPI Payment URL & App Gateway Configuration (Option 1) */}
-                      <div className="bg-white border border-espresso/15 p-6 rounded-xs space-y-5 shadow-3xs">
-                        <div className="border-b border-espresso/10 pb-3 flex items-center justify-between">
-                          <div className="flex items-center space-x-2.5">
-                            <div className="w-8 h-8 rounded-full bg-terracotta text-white flex items-center justify-center shadow-xs">
-                              <Smartphone className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <div className="flex items-center space-x-2">
-                                <h4 className="font-serif text-base font-bold text-espresso">Direct UPI Payment & App Intent Configuration</h4>
-                                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-[9px] font-extrabold uppercase tracking-wider">
-                                  Option 1 Active
-                                </span>
-                              </div>
-                              <p className="text-[10px] text-taupe">Configure your UPI ID (VPA) so customers can pay directly through Google Pay, PhonePe, Paytm, or BHIM.</p>
-                            </div>
-                          </div>
-                        </div>
-
-                        <form onSubmit={handleSaveUpiSettings} className="space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {/* UPI ID (VPA) */}
-                            <div>
-                              <label className="block text-[10px] uppercase tracking-wider font-extrabold text-espresso mb-1">
-                                Store UPI ID (VPA) *
-                              </label>
-                              <div className="relative">
-                                <input
-                                  type="text"
-                                  placeholder="e.g. 9916026262@upi or zerish@okhdfcbank"
-                                  value={localUpiSettings.upiId}
-                                  onChange={(e) => {
-                                    setLocalUpiSettings(prev => ({ ...prev, upiId: e.target.value }));
-                                    if (upiValidationError) setUpiValidationError(null);
-                                  }}
-                                  className="w-full border border-espresso/25 p-2.5 text-xs bg-[#FAF8F6] font-mono font-semibold focus:outline-hidden focus:border-terracotta rounded-xs"
-                                  required
-                                />
-                              </div>
-                              <p className="text-[10px] text-taupe mt-1">
-                                This is your bank or merchant Virtual Payment Address that receives payments directly.
-                              </p>
-                            </div>
-
-                            {/* Merchant / Business Payee Name */}
-                            <div>
-                              <label className="block text-[10px] uppercase tracking-wider font-extrabold text-espresso mb-1">
-                                Payee / Merchant Business Name *
-                              </label>
-                              <input
-                                type="text"
-                                placeholder="e.g. Zerish Luxe Fine Jewellery"
-                                value={localUpiSettings.merchantName}
-                                onChange={(e) => setLocalUpiSettings(prev => ({ ...prev, merchantName: e.target.value }))}
-                                className="w-full border border-espresso/25 p-2.5 text-xs bg-[#FAF8F6] font-medium focus:outline-hidden focus:border-terracotta rounded-xs"
-                                required
-                              />
-                              <p className="text-[10px] text-taupe mt-1">
-                                Displayed in customer's UPI payment apps as the verified payee.
-                              </p>
-                            </div>
-
-                            {/* Transaction Note */}
-                            <div className="md:col-span-2">
-                              <label className="block text-[10px] uppercase tracking-wider font-extrabold text-espresso mb-1">
-                                Default Payment Note / Description
-                              </label>
-                              <input
-                                type="text"
-                                placeholder="e.g. Zerish Luxe Fine Jewellery Order"
-                                value={localUpiSettings.defaultNote || ''}
-                                onChange={(e) => setLocalUpiSettings(prev => ({ ...prev, defaultNote: e.target.value }))}
-                                className="w-full border border-espresso/25 p-2.5 text-xs bg-[#FAF8F6] font-medium focus:outline-hidden focus:border-terracotta rounded-xs"
-                              />
-                              <p className="text-[10px] text-taupe mt-1">
-                                Pre-filled note in the UPI transaction receipt (appends order number automatically at checkout).
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Direct 1-Tap App Pay toggle */}
-                          <div className="p-3 bg-[#FAF8F6] border border-espresso/15 rounded-xs flex items-center justify-between">
-                            <div>
-                              <span className="text-xs font-bold text-espresso block">Enable Direct "Pay with UPI App" Buttons</span>
-                              <span className="text-[10px] text-taupe block">
-                                Shows Google Pay, PhonePe, Paytm, and BHIM buttons that launch the app with pre-filled amount.
-                              </span>
-                            </div>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={localUpiSettings.isDirectAppPayEnabled}
-                                onChange={(e) => setLocalUpiSettings(prev => ({ ...prev, isDirectAppPayEnabled: e.target.checked }))}
-                                className="sr-only peer"
-                              />
-                              <div className="w-9 h-5 bg-espresso/20 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-espresso/30 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
-                            </label>
-                          </div>
-
-                          {/* Live Generated UPI URI Preview Card */}
-                          <div className="p-3 bg-linen/25 border border-espresso/15 rounded-xs space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[9px] uppercase tracking-wider font-extrabold text-taupe">
-                                Generated NPCI UPI URL / Deep Link Preview (Sample Order)
-                              </span>
-                              <button
-                                type="button"
-                                onClick={handleCopySampleUpiUrl}
-                                className="text-[10px] text-espresso font-bold flex items-center space-x-1 hover:text-terracotta cursor-pointer"
-                              >
-                                {copiedUpiUrl ? (
-                                  <>
-                                    <Check className="w-3 h-3 text-emerald-600" />
-                                    <span className="text-emerald-700">Copied Link!</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Copy className="w-3 h-3" />
-                                    <span>Copy Sample Link</span>
-                                  </>
-                                )}
-                              </button>
-                            </div>
-                            <div className="p-2 bg-white border border-espresso/10 rounded-xs font-mono text-[10px] text-espresso break-all select-all">
-                              {sampleUpiUrl}
-                            </div>
-                            <div className="flex items-center space-x-3 text-[10px] text-taupe">
-                              <span>• Supports Android & iOS intent handlers</span>
-                              <span>• Supports Google Pay, PhonePe, Paytm, BHIM, Cred</span>
-                            </div>
-                          </div>
-
-                          {/* Error Notice */}
-                          {upiValidationError && (
-                            <div className="p-2.5 bg-red-50 border border-red-200 rounded-xs flex items-center space-x-2 text-red-700 text-xs">
-                              <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
-                              <span>{upiValidationError}</span>
-                            </div>
-                          )}
-
-                          {/* Success Notice */}
-                          {upiSavedNotice && (
-                            <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xs flex items-center space-x-2 text-emerald-800 text-xs font-bold">
-                              <Check className="w-4 h-4 text-emerald-600" />
-                              <span>UPI Settings saved successfully! Active across checkout and QR code payments.</span>
-                            </div>
-                          )}
-
-                          {/* Save Button */}
-                          <div className="flex items-center justify-between pt-2">
-                            <a
-                              href={sampleUpiUrl}
-                              className="text-[10px] uppercase tracking-wider font-extrabold text-terracotta hover:underline flex items-center space-x-1"
-                            >
-                              <span>Test UPI Intent on this device</span>
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
-
-                            <button
-                              type="submit"
-                              disabled={upiSaving}
-                              className="py-2.5 px-6 bg-espresso hover:bg-terracotta text-white rounded-xs text-[10px] uppercase tracking-widest font-extrabold flex items-center space-x-2 transition-all cursor-pointer shadow-xs disabled:opacity-50"
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                              <span>{upiSaving ? 'Saving UPI Settings...' : 'Save UPI Settings'}</span>
-                            </button>
-                          </div>
-                        </form>
-                      </div>
-
-                      {/* Store Payment QR Code Settings */}
-                      <div className="bg-white border border-espresso/10 p-6 rounded-xs space-y-5 shadow-3xs">
-                        <div className="border-b border-espresso/10 pb-3 flex items-center justify-between">
-                          <div className="flex items-center space-x-2.5">
-                            <div className="w-8 h-8 rounded-full bg-espresso text-linen flex items-center justify-center">
-                              <QrCode className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <h4 className="font-serif text-base font-bold text-espresso">Store Payment QR Code</h4>
-                              <p className="text-[10px] text-taupe">Upload your personal or business UPI QR code for direct customer payments.</p>
-                            </div>
-                          </div>
-                          {customStoreQr && (
-                            <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[9px] font-bold uppercase tracking-wider">
-                              Custom QR Active
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-                          {/* QR Preview Frame */}
-                          <div className="flex flex-col items-center justify-center p-4 bg-[#FAF8F6] border border-espresso/10 rounded-xs">
-                            {customStoreQr ? (
-                              <img 
-                                src={customStoreQr} 
-                                alt="Store Custom QR Code" 
-                                className="w-44 h-44 object-contain rounded-xs bg-white p-2 border border-espresso/15 shadow-2xs" 
-                              />
-                            ) : (
-                              <div className="w-44 h-44 flex flex-col items-center justify-center text-center p-4 bg-white border border-dashed border-espresso/20 rounded-xs space-y-2">
-                                <QrCode className="w-10 h-10 text-taupe/40" />
-                                <span className="text-[10px] text-taupe font-medium">No custom QR code uploaded yet</span>
-                              </div>
-                            )}
-                            <p className="text-[9px] text-taupe uppercase tracking-widest font-extrabold mt-3">
-                              {customStoreQr ? 'Active Customer Payment QR' : 'Standard Fallback QR Code'}
-                            </p>
-                          </div>
-
-                          {/* Upload Controls & Description */}
-                          <div className="md:col-span-2 space-y-4">
-                            <div className="space-y-1">
-                              <h5 className="text-xs font-bold uppercase tracking-wider text-espresso">
-                                Upload Your Own QR Code Image
-                              </h5>
-                              <p className="text-[11px] text-taupe leading-relaxed">
-                                Upload any QR code image screenshot from Google Pay, PhonePe, Paytm, BharatPe, or your bank. Customers will scan this exact image at checkout.
-                              </p>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-3 pt-1">
-                              <input 
-                                type="file" 
-                                accept="image/*" 
-                                id="seller-qr-upload" 
-                                className="hidden" 
-                                onChange={handleCustomStoreQrUpload} 
-                              />
-                              <label
-                                htmlFor="seller-qr-upload"
-                                className="py-2.5 px-5 bg-espresso hover:bg-terracotta text-white rounded-xs text-[10px] uppercase tracking-widest font-extrabold flex items-center space-x-2 transition-all cursor-pointer shadow-xs"
-                              >
-                                <Upload className="w-3.5 h-3.5" />
-                                <span>{qrUploadLoading ? 'Uploading QR Code...' : customStoreQr ? 'Upload New QR Code' : 'Upload My QR Code'}</span>
-                              </label>
-
-                              {customStoreQr && (
-                                <button
-                                  type="button"
-                                  onClick={handleRemoveStoreQr}
-                                  className="py-2.5 px-4 border border-espresso/20 text-espresso/80 hover:text-terracotta hover:border-terracotta rounded-xs text-[10px] uppercase tracking-widest font-bold transition-all cursor-pointer"
-                                >
-                                  Remove & Reset
-                                </button>
-                              )}
-                            </div>
-
-                            {qrSavedNotice && (
-                              <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xs flex items-center space-x-2 text-emerald-800 text-[10px] font-bold">
-                                <Check className="w-3.5 h-3.5 text-emerald-600" />
-                                <span>Custom QR Code saved and updated across store checkout instantly!</span>
-                              </div>
-                            )}
-
-                            <div className="p-3 bg-linen/25 border border-espresso/10 rounded-xs text-[9px] text-taupe space-y-1">
-                              <p className="font-bold text-espresso uppercase tracking-wider">Tips for Best Results:</p>
-                              <p>• Save a clear screenshot of your QR code from your UPI app (GPay / PhonePe / Paytm / Bank).</p>
-                              <p>• Crop tightly around the QR square before uploading for fastest scan response.</p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
                       {/* Festive Event & Hero Carousel Customizer */}
                       <div className="bg-white border border-espresso/10 p-6 rounded-xs space-y-6 shadow-3xs">
                         <div className="border-b border-espresso/10 pb-3 flex items-center justify-between">
@@ -3544,7 +3136,7 @@ export default function SellerPortal({
                                   likes: Math.floor(Math.random() * 400) + 100,
                                   comments: Math.floor(Math.random() * 30) + 5,
                                   location: studioLocation || 'Kochi, Kerala',
-                                  jewellery: studioJewellery || 'Zerish Luxe Fine Jewelry'
+                                  jewellery: studioJewellery || 'Zerish Luxe Anti Tarnish Jewellery'
                                 };
                                 await onAddInstagramPost(finalPost);
                                 // Reset form
