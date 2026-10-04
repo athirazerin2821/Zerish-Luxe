@@ -87,13 +87,6 @@ import SellerPortal from './components/SellerPortal';
 import OrderDetailsModal from './components/OrderDetailsModal';
 import { buildWhatsAppEnquiryUrl, openWhatsAppEnquiry } from './utils/whatsappSlip';
 import { generateOrderAndEnquiryIds } from './utils/orderIdGenerator';
-const HERO_VIDEO_URL = 'https://assets.mixkit.co/videos/preview/mixkit-beautiful-girl-wearing-jewelry-40545-large.mp4';
-
-const HERO_FRAMES = [
-  'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?q=80&w=2400&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?q=80&w=2400&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1611591475155-4286fa2c2e74?q=80&w=2400&auto=format&fit=crop',
-];
 
 function safeSetItem(key: string, value: string) {
   try {
@@ -104,15 +97,8 @@ function safeSetItem(key: string, value: string) {
 }
 
 export default function App() {
-  const [heroVideoUrl, setHeroVideoUrl] = useState(HERO_VIDEO_URL);
   const [currentFrame, setCurrentFrame] = useState(0);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentFrame(prev => (prev + 1) % HERO_FRAMES.length);
-    }, 6000);
-    return () => clearInterval(timer);
-  }, []);
   // --- STATE PERSISTENCE ---
   const [products, setProducts] = useState<Product[]>(() => {
     const saved = localStorage.getItem('zl_products');
@@ -298,18 +284,27 @@ export default function App() {
         if (parsed && Array.isArray(parsed.slides) && parsed.slides.length > 0) {
           const sanitizedSlides = parsed.slides.map((s: any, idx: number) => {
             let img = s.imageUrl;
-            if (!img || img.startsWith('/src/') || (img.startsWith('/assets/images/'))) {
+            if (!img || img.startsWith('/src/')) {
+              img = img ? img.replace('/src/', '/') : DEFAULT_HERO_SLIDES[idx % DEFAULT_HERO_SLIDES.length]?.imageUrl;
+            }
+            if (img.includes('satin_flowers') || img.includes('with_flowers') || img.includes('macro_gold') || img.includes('unsplash.com')) {
               img = DEFAULT_HERO_SLIDES[idx % DEFAULT_HERO_SLIDES.length]?.imageUrl;
             }
             return { ...s, imageUrl: img };
           });
-          return { ...parsed, slides: sanitizedSlides };
+          return {
+            ...parsed,
+            slides: sanitizedSlides,
+            autoPlay: false,
+            autoPlayIntervalSeconds: 0
+          };
         }
       } catch (e) {}
     }
     return {
       slides: DEFAULT_HERO_SLIDES,
-      autoPlayIntervalSeconds: 6,
+      autoPlay: false,
+      autoPlayIntervalSeconds: 0,
       activeFestiveTheme: 'classic'
     };
   });
@@ -331,12 +326,15 @@ export default function App() {
   }, [heroCarouselSettings]);
 
   useEffect(() => {
+    // Keep model images static and do not automatically change images unless seller explicitly enables autoPlay
     const slidesCount = heroCarouselSettings?.slides?.length || 1;
-    if (slidesCount <= 1) return;
-    const intervalMs = (heroCarouselSettings.autoPlayIntervalSeconds || 6) * 1000;
+    const intervalSec = heroCarouselSettings?.autoPlayIntervalSeconds || 0;
+    const isAutoPlay = heroCarouselSettings?.autoPlay === true;
+    if (!isAutoPlay || intervalSec <= 0 || slidesCount <= 1) return;
+
     const timer = setInterval(() => {
       setCurrentFrame(prev => (prev + 1) % slidesCount);
-    }, intervalMs);
+    }, intervalSec * 1000);
     return () => clearInterval(timer);
   }, [heroCarouselSettings]);
 
@@ -1422,9 +1420,10 @@ export default function App() {
                   onError={(e) => {
                     const target = e.currentTarget;
                     const fallbacks = [
-                      'https://images.unsplash.com/photo-1626784215021-2e39ac514150?q=85&w=1600&auto=format&fit=crop',
-                      'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?q=85&w=1600&auto=format&fit=crop',
-                      'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?q=85&w=1600&auto=format&fit=crop'
+                      '/assets/images/luxury_jewelry_modest_banner_1783756629266.jpg',
+                      '/assets/images/luxury_jewelry_modest_banner_v2_1783756827703.jpg',
+                      '/assets/images/high_quality_modest_jewelry_model_1783755409802.jpg',
+                      '/assets/images/luxury_jewelry_v_neck_banner_1783756960523.jpg'
                     ];
                     const fallbackImg = fallbacks[idx % fallbacks.length];
                     if (target.src !== fallbackImg) {
@@ -3232,5 +3231,4 @@ export default function App() {
 
     </div>
   );
-  
 }
