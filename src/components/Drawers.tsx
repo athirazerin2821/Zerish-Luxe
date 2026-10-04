@@ -537,9 +537,15 @@ export function AccountDrawer({
                               <span className="font-bold text-espresso">Total: ₹{o.total.toLocaleString('en-IN')}</span>
                             </div>
 
-                            <div className="flex items-center justify-between bg-white px-2 py-1.5 border border-espresso/5 rounded-xs text-[9px]">
-                              <span className="text-taupe uppercase tracking-wider">Tracking:</span>
-                              <span className="font-mono font-bold text-espresso uppercase">{o.trackingNumber}</span>
+                            <div className="bg-white px-2 py-1.5 border border-espresso/5 rounded-xs text-[9px] space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-taupe uppercase tracking-wider">Enquire No:</span>
+                                <span className="font-mono font-bold text-terracotta uppercase">{o.trackingNumber}</span>
+                              </div>
+                              <div className="flex items-center justify-between text-[8.5px] text-taupe border-t border-espresso/5 pt-0.5">
+                                <span>Order ID:</span>
+                                <span className="font-mono text-espresso font-semibold">{o.id}</span>
+                              </div>
                             </div>
 
                             {onSelectOrder && (
