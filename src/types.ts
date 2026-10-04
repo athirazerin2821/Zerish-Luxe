@@ -62,7 +62,7 @@ export interface Order {
   date: string;
   trackingNumber: string;
   isPaid?: boolean;
-  paymentMethod?: 'UPI_QR' | 'COD' | 'CARD_ONLINE';
+  paymentMethod?: 'UPI_QR' | 'COD' | 'CARD_ONLINE' | 'WhatsApp Enquiry';
   upiTransactionRef?: string;
 }
 
@@ -125,13 +125,6 @@ export interface HeroCarouselSettings {
   slides: HeroSlide[];
   autoPlayIntervalSeconds?: number;
   activeFestiveTheme?: string;
-}
-
-export interface UpiPaymentSettings {
-  upiId: string; // e.g. "zerishluxe@okhdfcbank" or "9790173288@upi"
-  merchantName: string; // e.g. "Zerish Luxe Anti-Tarnish Jewellery"
-  defaultNote?: string; // e.g. "Order from Zerish Luxe"
-  isDirectAppPayEnabled: boolean;
 }
 
 
