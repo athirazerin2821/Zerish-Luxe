@@ -49,7 +49,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
               ZL
             </div>
             <h1 className="font-serif text-2xl font-bold text-[#262220]">Zerish Luxe</h1>
-            <p className="text-xs text-[#C3A6A0] uppercase tracking-widest font-semibold">Fine Jewellery Experience</p>
+            <p className="text-xs text-[#C3A6A0] uppercase tracking-widest font-semibold">Anti Tarnish Jewellery Experience</p>
             <p className="text-sm text-[#262220]/80 leading-relaxed">
               We encountered a temporary display issue while loading the boutique. Please refresh to continue your curation.
             </p>
