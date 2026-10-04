@@ -3316,4 +3316,5 @@ export default function SellerPortal({
       </main>
     </div>
   );
+  
 }
