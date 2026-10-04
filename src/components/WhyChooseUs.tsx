@@ -101,7 +101,7 @@ export default function WhyChooseUs() {
           </h2>
           <div className="w-12 h-[1px] bg-taupe mx-auto mt-4"></div>
           <p className="text-sm text-espresso/70 mt-3">
-            Discover why our anti-tarnish fine collections are trusted by modern collectors across India.
+            Discover why our anti-tarnish jewelry collections are trusted by modern collectors across India.
           </p>
         </div>
 
