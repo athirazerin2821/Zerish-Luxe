@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Search, Truck, MapPin, CheckCircle, Clock, Eye } from 'lucide-react';
 import { Order } from '../types';
 import { db } from '../firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 
 interface TrackOrderModalProps {
   isOpen: boolean;
@@ -26,7 +26,7 @@ export default function TrackOrderModal({ isOpen, onClose, orders, onViewOrderDe
     // 1. Try local memory state if we have orders loaded
     if (orders && orders.length > 0) {
       const matched = orders.find(
-        o => o.id.toUpperCase() === cleanId.toUpperCase() || 
+        o => (o.id && o.id.toUpperCase() === cleanId.toUpperCase()) || 
              (o.trackingNumber && o.trackingNumber.toUpperCase() === cleanId.toUpperCase())
       );
       if (matched) {
@@ -46,21 +46,32 @@ export default function TrackOrderModal({ isOpen, onClose, orders, onViewOrderDe
       }
     }
 
-    // 3. Direct Firestore Document lookup fallback (ZL-XXXX)
+    // 3. Direct Firestore Document lookup fallback (Order ID or Enquire Number)
     if (!foundOrder) {
       try {
-        // Doc IDs are uppercase order ID, e.g. ZL-4291 or ZL-8910
-        const docRef = doc(db, 'orders', cleanId.toUpperCase());
+        // 3a. Try by document ID (Order ID e.g. ZL_20260918_0008)
+        const docRef = doc(db, 'orders', cleanId);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           foundOrder = docSnap.data() as Order;
-        } else {
-          // Try without matching the ZL- prefix if they only entered digits
-          const fullId = cleanId.toUpperCase().startsWith('ZL-') ? cleanId.toUpperCase() : `ZL-${cleanId.toUpperCase()}`;
-          const docRefPrefixed = doc(db, 'orders', fullId);
-          const docSnapPrefixed = await getDoc(docRefPrefixed);
-          if (docSnapPrefixed.exists()) {
-            foundOrder = docSnapPrefixed.data() as Order;
+        }
+
+        // 3b. Try by Enquire Number (trackingNumber field e.g. ZL-001)
+        if (!foundOrder) {
+          const q = query(collection(db, 'orders'), where('trackingNumber', '==', cleanId.toUpperCase()));
+          const querySnap = await getDocs(q);
+          if (!querySnap.empty) {
+            foundOrder = querySnap.docs[0].data() as Order;
+          }
+        }
+
+        // 3c. Try with ZL- prefix if user typed just the number (e.g. 001)
+        if (!foundOrder && !cleanId.toUpperCase().startsWith('ZL')) {
+          const paddedEnquiry = `ZL-${cleanId.padStart(3, '0')}`;
+          const qPadded = query(collection(db, 'orders'), where('trackingNumber', '==', paddedEnquiry));
+          const querySnapPadded = await getDocs(qPadded);
+          if (!querySnapPadded.empty) {
+            foundOrder = querySnapPadded.docs[0].data() as Order;
           }
         }
       } catch (err) {
@@ -104,13 +115,13 @@ export default function TrackOrderModal({ isOpen, onClose, orders, onViewOrderDe
         <form onSubmit={handleTrack} className="space-y-3 mb-6">
           <div>
             <label className="block text-[10px] uppercase tracking-wider font-semibold text-espresso mb-1">
-              Tracking Number or Order ID
+              Enquire Number or Order ID
             </label>
             <div className="relative">
               <input 
                 type="text" 
                 required
-                placeholder="e.g., ZL-4921 or Order ID"
+                placeholder="e.g., ZL-001 or ZL_20260918_0008"
                 value={trackingId}
                 onChange={(e) => setTrackingId(e.target.value)}
                 className="w-full border border-espresso/20 py-2.5 pl-3 pr-10 text-xs text-espresso bg-white focus:border-terracotta focus:outline-hidden uppercase tracking-wider"
@@ -123,7 +134,7 @@ export default function TrackOrderModal({ isOpen, onClose, orders, onViewOrderDe
               </button>
             </div>
             <p className="text-[9px] text-taupe mt-1">
-              Tip: Your tracking number was displayed during checkout (e.g., ZL-1011).
+              Tip: Your enquire number (e.g., ZL-001) or order ID was provided during checkout.
             </p>
           </div>
         </form>
@@ -135,14 +146,20 @@ export default function TrackOrderModal({ isOpen, onClose, orders, onViewOrderDe
               <div className="space-y-4">
                 
                 {/* Meta Summary Header */}
-                <div className="bg-linen/20 p-3 rounded-xs flex items-center justify-between border border-espresso/5">
-                  <div>
-                    <p className="text-[9px] uppercase tracking-wider text-taupe">Tracking Reference</p>
-                    <p className="text-xs font-bold text-espresso">{searchResult.trackingNumber}</p>
+                <div className="bg-linen/20 p-3 rounded-xs space-y-2 border border-espresso/5">
+                  <div className="flex items-center justify-between text-xs">
+                    <div>
+                      <p className="text-[9px] uppercase tracking-wider text-taupe">Enquire Number</p>
+                      <p className="font-mono text-xs font-bold text-terracotta">{searchResult.trackingNumber}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[9px] uppercase tracking-wider text-taupe">Order ID</p>
+                      <p className="font-mono text-xs font-bold text-espresso">{searchResult.id}</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-[9px] uppercase tracking-wider text-taupe">Recipient</p>
-                    <p className="text-xs font-semibold text-espresso">{searchResult.customerName}</p>
+                  <div className="border-t border-espresso/5 pt-1.5 flex items-center justify-between text-[11px]">
+                    <span className="text-[9px] uppercase tracking-wider text-taupe">Recipient:</span>
+                    <span className="font-semibold text-espresso">{searchResult.customerName}</span>
                   </div>
                 </div>
 
@@ -257,9 +274,9 @@ export default function TrackOrderModal({ isOpen, onClose, orders, onViewOrderDe
               </div>
             ) : (
               <div className="text-center py-6">
-                <p className="text-xs text-rose-600 font-bold mb-1">Tracking Code Not Found</p>
+                <p className="text-xs text-rose-600 font-bold mb-1">Order Record Not Found</p>
                 <p className="text-xs text-espresso/70 leading-normal max-w-sm mx-auto">
-                  We could not find tracking records for "{trackingId}". Double-check your code, or enter any temporary mockup code starting with <strong className="text-espresso">ZL-1011</strong> for demo purposes.
+                  We could not find records for "{trackingId}". Please double-check your enquire number (e.g., <strong className="text-espresso">ZL-001</strong>) or order ID (e.g., <strong className="text-espresso">ZL_20260918_0008</strong>).
                 </p>
               </div>
             )}
