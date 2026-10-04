@@ -123,6 +123,7 @@ export interface HeroSlide {
 
 export interface HeroCarouselSettings {
   slides: HeroSlide[];
+  autoPlay?: boolean;
   autoPlayIntervalSeconds?: number;
   activeFestiveTheme?: string;
 }
