@@ -4,7 +4,10 @@ const luxuryJewelryModestBannerImg = '/assets/images/luxury_jewelry_modest_banne
 const luxuryVneckAdCuffBannerImg = '/assets/images/luxury_vneck_ad_cuff_banner_1783757089887.jpg';
 const luxuryJewelryModestBannerV2Img = '/assets/images/luxury_jewelry_modest_banner_v2_1783756827703.jpg';
 const luxuryJewelryVNeckBannerImg = '/assets/images/luxury_jewelry_v_neck_banner_1783756960523.jpg';
-const goldJewelrySatinFlowersImg = '/assets/images/gold_jewelry_satin_flowers_1783581310352.jpg';
+const highQualityModestModelImg = '/assets/images/high_quality_modest_jewelry_model_1783755409802.jpg';
+const modestModelRightGoldImg = '/assets/images/modest_model_right_gold_jewelry_1783755207971.jpg';
+const modestOpenHairModelImg = '/assets/images/modest_open_hair_model_jewelry_1783755798891.jpg';
+const editorialEmeraldModelImg = '/assets/images/editorial_emerald_jewelry_model_1783753450701.jpg';
 const eleganceJewelryModelImg = '/assets/images/elegance_jewelry_model_1783579675029.jpg';
 
 export const DEFAULT_HERO_SLIDES: HeroSlide[] = [
@@ -92,7 +95,7 @@ export const FESTIVE_HERO_PRESETS: FestivePreset[] = [
     slides: [
       {
         id: 'diwali-slide-1',
-        imageUrl: goldJewelrySatinFlowersImg,
+        imageUrl: modestModelRightGoldImg,
         badge: '🪔 Diwali Festive Special • 20% OFF',
         title: 'Celebrate In Pure Radiance.',
         subtitle: 'The Luminous Festive Edit.',
@@ -202,7 +205,7 @@ export const FESTIVE_HERO_PRESETS: FestivePreset[] = [
     slides: [
       {
         id: 'val-slide-1',
-        imageUrl: goldJewelrySatinFlowersImg,
+        imageUrl: highQualityModestModelImg,
         badge: '❤️ The Valentine & Love Collection',
         title: 'Whispers Of Love.',
         subtitle: 'Gifts That Speak Forever.',
