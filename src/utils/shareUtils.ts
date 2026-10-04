@@ -8,7 +8,7 @@ export function formatWhatsAppProductMessage(product: Product): string {
   const priceFormatted = `₹${product.price.toLocaleString('en-IN')}`;
   const originalPriceFormatted = product.originalPrice ? `₹${product.originalPrice.toLocaleString('en-IN')}` : '';
   
-  let msg = `✨ *ZERISH LUXE FINE JEWELLERY* ✨\n\n`;
+  let msg = `✨ *ZERISH LUXE ANTI TARNISH JEWELLERY* ✨\n\n`;
   msg += `💍 *${product.name}*\n`;
   msg += `🏷️ *Price:* ${priceFormatted}`;
   if (product.originalPrice && product.originalPrice > product.price) {
